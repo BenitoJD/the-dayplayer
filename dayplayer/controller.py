@@ -8,12 +8,27 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import time
 
 from . import config, features, pipeline
 from .playback import Player
 from .recorder import Recorder
+
+
+def open_dashboard_window():
+    """Open the dashboard window as a separate process (works frozen
+    or from source, mac or windows)."""
+    if getattr(sys, "frozen", False):
+        subprocess.Popen([sys.executable, "--dashboard"])
+    else:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        kwargs = {"cwd": root}
+        if sys.platform != "win32":
+            kwargs["start_new_session"] = True      # detach from terminal
+        subprocess.Popen([sys.executable, "-m", "dayplayer.dashboard"], **kwargs)
 
 
 class Controller:

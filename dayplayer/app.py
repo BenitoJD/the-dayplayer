@@ -16,7 +16,7 @@ import sys
 import rumps
 
 from . import config
-from .controller import Controller
+from .controller import Controller, open_dashboard_window
 
 REFRESH_SECS = 2
 
@@ -61,6 +61,8 @@ class DayplayerApp(rumps.App):
         self._reveal_item = rumps.MenuItem(self._reveal)
         self.menu = [
             self._status, self._toggle, None,
+            rumps.MenuItem("◈  Open Dashboard", callback=lambda mi:
+                           open_dashboard_window()), None,
             self._render, None,
             self._play_a, self._play_b, self._stop_play, None,
             self._vote_a, self._vote_b, self._reveal_item, None,
@@ -153,7 +155,12 @@ class DayplayerApp(rumps.App):
         rumps.quit_application()
 
 
-def main():
+def main(argv=None):
+    argv = argv if argv is not None else sys.argv[1:]
+    if "--dashboard" in argv:
+        from .dashboard import main as dash_main
+        dash_main()
+        return
     config.ensure_dirs()
     if sys.platform == "darwin":
         DayplayerApp().run()

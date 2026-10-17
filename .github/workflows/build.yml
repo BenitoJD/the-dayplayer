@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
       - name: Build Dayplayer.exe
-        run: pyinstaller --noconfirm --name Dayplayer --onefile --windowed --icon assets/icon.ico --hidden-import pystray._win32 run_dayplayer.py
+        run: pyinstaller --noconfirm --name Dayplayer --onefile --windowed --icon assets/icon.ico --hidden-import pystray._win32 --hidden-import dayplayer.dashboard run_dayplayer.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

@@ -18,7 +18,7 @@ import pystray
 from PIL import Image, ImageDraw
 
 from . import config
-from .controller import Controller
+from .controller import Controller, open_dashboard_window
 
 ABOUT = ("The Dayplayer\n\n"
          "Your workday, played back.\n\n"
@@ -65,6 +65,8 @@ class WinTrayApp:
             pystray.MenuItem(lambda item: self.ctl.toggle_title(),
                              self.on_toggle, default=True),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("◈  Open Dashboard",
+                             lambda: open_dashboard_window()),
             pystray.MenuItem(lambda item: "Rendering… (~30s)"
                              if self._rendering else "▶  Render My Day",
                              self.on_render),
