@@ -34,9 +34,8 @@ If you moved the repo or changed code: run `./make_app.sh` to rebuild the app.
 
 ## Circadia Live — hear your state while you work
 
-Menu → **◉ Go Live** (or the GO LIVE button in the dashboard). A window with
-a breathing orb opens, and a generative soundscape morphs with your state
-in real time:
+In the main window, press **◉ listen live** — the ring itself starts
+breathing with your state, and a generative soundscape morphs in real time:
 
 - **Flow** → a warm pad and a soft heartbeat that tracks your typing tempo
 - **Flail** → static and two clashing notes creeping in
@@ -48,12 +47,12 @@ mirror: nothing to chase, nothing to feel bad about (see PRINCIPLES.md).
 
 ## The Week — the audible diary
 
-Dashboard → **WEEK** tab. Seven day-cards show each day's pattern mix;
-**▶ RENDER MY WEEK** turns them into one album (~42s per day, crossfaded) —
-a week of your life you can *hear*. Tag your days ("shipped", "meeting
-day", "good day") on the Today tab; once a tag has ≥2 days, the Week tab
-shows what your tagged days look like versus the rest — descriptive, never
-scores.
+Seven dots at the bottom of the window are your week (each colored by the
+day's dominant pattern — click to visit a day). **Play My Week** turns
+them into one album (~42s per day, crossfaded) — a week of your life you
+can *hear*. Tag your days ("shipped", "meeting day", "good day") in the
+whisper line; once a tag has ≥2 days, the window tells you what your
+tagged days look like versus the rest — descriptive, never scores.
 
 ## The app (Windows)
 
@@ -71,21 +70,17 @@ Double-click the tray icon to start/stop recording — **no permission
 prompt on Windows**, it just works. Right-click for the full menu
 (Render, Play A/B, vote, Quit) — same features as the macOS app.
 
-## The dashboard
+## The window
 
-From the menu bar / tray menu choose **◈ Open Dashboard** — a futuristic
-window (same on both platforms) with everything about your day:
+From the menu bar / tray choose **◈ Open Dashboard** — one window, one
+object: **your day as a living ring** (noon at top, a glowing dot at now;
+quiet hours are negative space, active minutes paint the circle — hover
+any point to see what happened). Under it, one sentence in plain human
+words — *"You found 2h 41m of flow today. Your deepest run was 38
+minutes, before lunch."* — and one button, **Play My Day**. Navigate days
+with ‹ ›, tag the day in a whisper at the bottom.
 
 ![dashboard](docs/dashboard-preview.png)
-
-- **Today's timeline** — per-minute typing/mouse/idle, colored by pattern,
-  hover any minute for detail
-- **Patterns** — Flow / Flail / Drift / Mire minute counts (patterns,
-  never productivity scores — see docs/PRINCIPLES.md)
-- **Stat cards** — typing events, active minutes, longest flow streak,
-  flail minutes, app switches, mouse distance
-- **Top apps**, busiest hour
-- **Render My Day** with waveform players for the blind A/B test and vote
 
 ## The blind test is the gate
 
