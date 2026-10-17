@@ -1,6 +1,6 @@
 """Central paths and constants.
 
-PRIVACY: all raw logs live under ~/.dayplayer — OUTSIDE any git repo.
+PRIVACY: all raw logs live under ~/.dayplayer, OUTSIDE any git repo.
 Only rendered audio and anonymous aggregates are ever meant to leave
 this machine, and only when the user explicitly shares them.
 """
@@ -13,7 +13,7 @@ LOG_DIR = os.path.join(DATA_DIR, "logs")
 RENDER_DIR = os.path.join(DATA_DIR, "renders")
 
 # Render settings
-TARGET_DURATION = 180.0        # seconds — the "~3 minute piece"
+TARGET_DURATION = 180.0        # seconds, the "~3 minute piece"
 SAMPLE_RATE = 44100
 
 # Recorder settings

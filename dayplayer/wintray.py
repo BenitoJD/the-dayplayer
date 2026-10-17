@@ -1,10 +1,10 @@
-"""The Dayplayer — Windows system tray app (pystray).
+"""The Dayplayer, Windows system tray app (pystray).
 
 Same features as the macOS menu bar app, native Windows tray:
 double-click the tray icon to start/stop recording; right-click for
 the full menu (Render, Play A/B, vote, quit).
 
-Windows needs no special permission for global input hooks —
+Windows needs no special permission for global input hooks,
 it just works on first run.
 """
 from __future__ import annotations
@@ -20,8 +20,8 @@ from PIL import Image, ImageDraw
 from . import config
 from .controller import Controller, open_dashboard_window, open_live_window
 
-ABOUT = ("Circadia — your day, played back.\n\n"
-         "Records timings only — never letters, never content.\n"
+ABOUT = ("Circadia: your day, played back.\n\n"
+         "Records timings only, never letters, never content.\n"
          "Raw logs stay in ~/.dayplayer.\n\n"
          "docs/TRUST.md holds the full promise.")
 
@@ -71,7 +71,7 @@ class WinTrayApp:
         self.ctl = Controller(notify=self._notify)
         self._pending = None            # render result from worker thread
         self._rendering = False
-        self._reveal = "— vote first —"
+        self._reveal = ", vote first,"
         self._session_ready = False
         self.icon = pystray.Icon(
             "Circadia", _icon_image(False), "Circadia", menu=self._menu())
@@ -80,7 +80,7 @@ class WinTrayApp:
     # ------------------------------------------------------------- notify
     def _notify(self, title: str, message: str):
         try:
-            self.icon.notify(message=message, title=f"Circadia — {title}")
+            self.icon.notify(message=message, title=f"Circadia: {title}")
         except Exception:
             pass
 
@@ -94,7 +94,7 @@ class WinTrayApp:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("◈  Open Dashboard",
                              lambda: open_dashboard_window()),
-            pystray.MenuItem("◉  Go Live — hear your state",
+            pystray.MenuItem("◉  Go Live, hear your state",
                              lambda: open_live_window()),
             pystray.MenuItem(lambda item: "Rendering… (~30s)"
                              if self._rendering else "▶  Render My Day",
@@ -170,7 +170,7 @@ class WinTrayApp:
                 self._notify("Nothing to render", result.get("message", ""))
             return
         msg = self.ctl.accept_render(result)
-        self._reveal = "— vote first —"
+        self._reveal = ", vote first,"
         self._session_ready = True
         self._notify("Your day is ready", msg)
         self.icon.update_menu()

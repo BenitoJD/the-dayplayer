@@ -1,9 +1,9 @@
-"""Circadia (a.k.a. The Dayplayer) — native apps for macOS and Windows.
+"""Circadia (a.k.a. The Dayplayer), native apps for macOS and Windows.
 
 macOS   → menu bar app (rumps): ● / ○ in the menu bar
 Windows → system tray app (pystray): see dayplayer/wintray.py
 
-Both share dayplayer.controller — the recorder, render pipeline,
+Both share dayplayer.controller, the recorder, render pipeline,
 blind A/B playback and votes.
 
 Run:  python3 -m dayplayer.app   (or double-click the platform app)
@@ -27,7 +27,7 @@ class DayplayerApp(rumps.App):
         self.ctl = Controller(notify=self._notify)
         self._pending = None            # render result, consumed on main loop
         self._rendering = False
-        self._reveal = "— vote first —"
+        self._reveal = ", vote first,"
         self._build_menu()
         self._refresh()
 
@@ -63,7 +63,7 @@ class DayplayerApp(rumps.App):
             self._status, self._toggle, None,
             rumps.MenuItem("◈  Open Dashboard", callback=lambda mi:
                            open_dashboard_window()),
-            rumps.MenuItem("◉  Go Live — hear your state", callback=lambda mi:
+            rumps.MenuItem("◉  Go Live, hear your state", callback=lambda mi:
                            open_live_window()), None,
             self._render, None,
             self._play_a, self._play_b, self._stop_play, None,
@@ -129,7 +129,7 @@ class DayplayerApp(rumps.App):
                 self._notify("Nothing to render", result.get("message", ""))
             return
         msg = self.ctl.accept_render(result)
-        self._reveal = "— vote first —"
+        self._reveal = ", vote first,"
         self._set_enabled(True)
         self._notify("Your day is ready", msg)
 
@@ -146,7 +146,7 @@ class DayplayerApp(rumps.App):
         rumps.Window(
             title="Circadia",
             message="Your day, played back.\n\n"
-                    "Records timings only — never letters, never content.\n"
+                    "Records timings only, never letters, never content.\n"
                     "Raw logs stay in ~/.dayplayer.\n\n"
                     "docs/TRUST.md holds the full promise.",
             dimensions=(320, 200)).run()

@@ -1,8 +1,8 @@
-"""Circadia Live — the real-time window: your attention as an instrument.
+"""Circadia Live, the real-time window: your attention as an instrument.
 
 A big orb breathes in the color of your current state; the soundscape
-morphs with it (see live.py). CALM MODE hides every number — just the
-orb and the sound — a non-judgmental mirror (nothing to chase, nothing
+morphs with it (see live.py). CALM MODE hides every number, just the
+orb and the sound, a non-judgmental mirror (nothing to chase, nothing
 to feel bad about).
 
 Run:  python3 -m dayplayer.livewindow
@@ -48,7 +48,7 @@ QCheckBox {{ color: {DIM}; font-size: 12px; }}
 
 
 class Orb(QWidget):
-    """Breathing state orb — color = pattern, mixed by live weights."""
+    """Breathing state orb, color = pattern, mixed by live weights."""
 
     def __init__(self, engine: LiveEngine):
         super().__init__()
@@ -89,7 +89,7 @@ class Orb(QWidget):
 class LiveWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Circadia Live — hear your state")
+        self.setWindowTitle("Circadia Live: hear your state")
         self.resize(460, 560)
         icon = os.path.join(os.path.dirname(__file__), "..", "assets",
                             "icon.png")
@@ -158,7 +158,7 @@ class LiveWindow(QMainWindow):
         else:
             self.engine.start()
             if not self.engine.audio_on:
-                self.stats.setText("(no audio device — analysis only)")
+                self.stats.setText("(no audio device, analysis only)")
             self.start_btn.setText("■ STOP SESSION")
             self.start_btn.setObjectName("stop")
         self._tick()
@@ -174,7 +174,7 @@ class LiveWindow(QMainWindow):
             f"font-size:22px;font-weight:700;color:{meta['color']};")
         if self.engine.running and not self.engine.trusted:
             self.stats.setText(
-                "macOS isn't sharing input yet — grant Accessibility "
+                "macOS isn't sharing input yet, grant Accessibility "
                 "access to Circadia, then restart it")
             return
         if not self.calm.isChecked():

@@ -93,7 +93,15 @@ def main():
     sid = sorted(new_sessions)[-1]
     meta = json.load(open(os.path.join(config.RENDER_DIR, sid, "meta.json")))
     print(f"[3] render OK: session {sid} (real = {meta['real_label']})")
-    win.ctl.stop_playback()          # silence the auto-play
+
+    # ---- 3b. a real STOP control: pressing it actually silences audio
+    assert win.ctl.player.playing, "render should auto-play player A"
+    assert win.stop_btn.isVisible(), "stop control appears while playing"
+    QTest.mouseClick(win.stop_btn, Qt.LeftButton)
+    pump(app, 0.6)
+    assert not win.ctl.player.playing, "stop button must silence playback"
+    assert not win.stop_btn.isVisible(), "stop control hides when idle"
+    print("[3b] stop button: playing -> stopped, control hidden again")
 
     # ---- 4. vote the WRONG label, then the RIGHT one
     wrong = "b" if meta["real_label"] == "a" else "a"

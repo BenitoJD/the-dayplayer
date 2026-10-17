@@ -1,4 +1,4 @@
-"""Shared test fixtures — synthetic days written into a temp log dir.
+"""Shared test fixtures, synthetic days written into a temp log dir.
 
 Tests isolate themselves: they point config.LOG_DIR / RENDER_DIR at a
 temp directory, so the user's real ~/.dayplayer data is never touched

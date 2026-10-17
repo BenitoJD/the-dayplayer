@@ -6,13 +6,13 @@ rm -rf Circadia.app
 mkdir -p Circadia.app/Contents/MacOS Circadia.app/Contents/Resources
 cat > Circadia.app/Contents/MacOS/Circadia <<'EOF'
 #!/bin/bash
-# Circadia launcher. Keep Circadia.app inside its folder —
+# Circadia launcher. Keep Circadia.app inside its folder,
 # it uses the bundled Python environment next to it.
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"        # .../Circadia.app/Contents
 ROOT="$(cd "$APP_DIR/../.." && pwd)"               # the dayplayer folder
 PY="$ROOT/.venv/bin/python"
 if [ ! -x "$PY" ]; then
-  osascript -e 'display alert "Circadia" message "Keep Circadia.app inside its folder — it needs the bundled Python environment next to it."'
+  osascript -e 'display alert "Circadia" message "Keep Circadia.app inside its folder, it needs the bundled Python environment next to it."'
   exit 1
 fi
 cd "$ROOT"
@@ -40,4 +40,4 @@ cat > Circadia.app/Contents/Info.plist <<'EOF'
 EOF
 cp assets/icon.icns Circadia.app/Contents/Resources/icon.icns
 codesign --force -s - Circadia.app
-echo "✔ Circadia.app rebuilt — double-click it to run."
+echo "✔ Circadia.app rebuilt, double-click it to run."

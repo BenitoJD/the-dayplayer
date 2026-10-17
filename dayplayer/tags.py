@@ -1,4 +1,4 @@
-"""Day outcome tags — user-written labels like 'shipped', 'meeting day',
+"""Day outcome tags, user-written labels like 'shipped', 'meeting day',
 'good day'. Stored locally in ~/.dayplayer/tags.json. Correlations with
 patterns are *descriptive*, never scores (see PRINCIPLES.md)."""
 from __future__ import annotations

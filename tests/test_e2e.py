@@ -159,7 +159,7 @@ def main():
               f"{mm_events} move events recorded")
         print("    privacy OK: kd events carry class only, never content")
     if not trusted or not kd_events:
-        print("    !! INPUT HOOKS BLOCKED BY macOS — no accessibility trust "
+        print("    !! INPUT HOOKS BLOCKED BY macOS, no accessibility trust "
               "for this process.\n"
               "    One-time fix (user action required):\n"
               "      System Settings → Privacy & Security → Accessibility →\n"
@@ -301,18 +301,18 @@ def main():
     keys = results.get("keys_captured", 0)
     moves = results.get("moves_captured", 0)
     if keys and results.get("live_flow_seen") and results.get("render_ok"):
-        print(f"VERDICT: full E2E PASS — real capture ({keys} key events, "
+        print(f"VERDICT: full E2E PASS, real capture ({keys} key events, "
               f"{moves} mouse events, class-only), live states through the "
               "real tail, render, blind engine, week album.")
     elif moves:
-        print(f"VERDICT: PARTIAL — mouse capture works ({moves} events) but "
+        print(f"VERDICT: PARTIAL, mouse capture works ({moves} events) but "
               f"no KEYBOARD events were delivered ({keys}).\n"
               "  macOS withholds keyboard input until the app is trusted:\n"
               "  System Settings → Privacy & Security → Accessibility →\n"
               "  add Circadia.app (or your terminal, for CLI runs), then "
               "restart it.")
     else:
-        print("VERDICT: BLOCKED — no input captured at all.\n"
+        print("VERDICT: BLOCKED, no input captured at all.\n"
               "  macOS is withholding events: grant Accessibility to\n"
               "  Circadia.app (System Settings → Privacy & Security →\n"
               "  Accessibility), then restart the app.")

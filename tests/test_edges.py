@@ -1,7 +1,7 @@
 """Edge-case suite: the weird days, the corrupt files, the extremes.
 
 Every case here is something that would otherwise reach a user:
-  · a 24-hour day (recorder left running) — used to render SILENT
+  · a 24-hour day (recorder left running), used to render SILENT
   · a 1-minute day · a markers-only log · a corrupt/partial JSONL line
   · a 100k-event day · tags with emoji/dupes/missing files
   · two renders in the same second · a vote with no session

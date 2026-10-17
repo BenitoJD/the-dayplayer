@@ -70,7 +70,7 @@ def main():
     print(f"[3] live idle -> {eng3.state}")
     assert eng3.state == patterns.MIRE
 
-    # ---- audio callback smoke (no device needed — call directly with the
+    # ---- audio callback smoke (no device needed, call directly with the
     # REAL sounddevice output-stream signature: (outdata, frames, t, status))
     import numpy as np
     eng.weights = {k: 0.25 for k in eng.weights}
@@ -84,7 +84,7 @@ def main():
     eng._audio_cb(outdata, 512, None, None)
     flail_peak = float(abs(outdata).max())
     assert flail_peak > 0.001, "flail layer should make sound"
-    # a broken synth call must not raise — it goes quiet for that block
+    # a broken synth call must not raise, it goes quiet for that block
     eng._audio_cb(type("Boom", (), {
         "fill": lambda self, v: (_ for _ in ()).throw(RuntimeError("x"))})(),
         512, None, None)
@@ -103,7 +103,7 @@ def main():
     assert 30 < dur < 120
 
     # ---- tags + correlations in an isolated environment (temp log dir +
-    # temp tags file, realistic dates — synthetic 2099-* is excluded by
+    # temp tags file, realistic dates, synthetic 2099-* is excluded by
     # design from real user correlations)
     import shutil
     import tempfile

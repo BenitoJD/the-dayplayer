@@ -1,4 +1,4 @@
-"""Circadia — one window, one object: your day as a living ring.
+"""Circadia, one window, one object: your day as a living ring.
 
 Design rules (the Jobs kind):
   one hero object · one sentence, human words · one primary button
@@ -187,7 +187,7 @@ def day_sentence(s: dict, live: bool, today: bool) -> list[str]:
     if s.get("empty"):
         if today:
             return ["Your day hasn't spoken yet.",
-                    "Press record — then just live it."]
+                    "Press record, then just live it."]
         return ["Nothing recorded this day.", ""]
     counts = s["counts"]
     flow_min = counts[patterns.FLOW]
@@ -332,6 +332,11 @@ class Dashboard(QMainWindow):
         for b in (self.ba, self.bb):
             b.setObjectName("round")
             row.addWidget(b)
+        self.stop_btn = QPushButton("■  Stop")
+        self.stop_btn.setObjectName("round")
+        self.stop_btn.clicked.connect(self._stop_playback)
+        self.stop_btn.hide()                 # only while something plays
+        row.addWidget(self.stop_btn)
         self.va = QPushButton("A is me")
         self.vb = QPushButton("B is me")
         for b in (self.va, self.vb):
@@ -401,6 +406,13 @@ class Dashboard(QMainWindow):
         self.rec_btn.style().unpolish(self.rec_btn)
         self.rec_btn.style().polish(self.rec_btn)
 
+        # playback finished on its own -> tidy the stop controls
+        if not self.ctl.player.playing:
+            if self.stop_btn.isVisible():
+                self.stop_btn.hide()
+            if self.week_btn.text().startswith("■"):
+                self.week_btn.setText("Play My Week")
+
         # title
         if today:
             self.title.setText("Today")
@@ -415,14 +427,14 @@ class Dashboard(QMainWindow):
             self.line1.setText(meta["label"].upper() + ".")
             self.line1.setStyleSheet(
                 f"font-size:25px;font-weight:300;color:{meta['color']};")
-            self.line2.setText("listening — you're hearing yourself work")
+            self.line2.setText("listening, you're hearing yourself work")
         else:
             l1, l2 = day_sentence(s, live, today)
             self.line1.setText(l1)
             self.line1.setStyleSheet("")
             # honest hint when macOS is silently dropping our input
             if not self.ctl.trusted:
-                l2 = ("macOS hasn't granted input access — System Settings → "
+                l2 = ("macOS hasn't granted input access, System Settings → "
                       "Privacy & Security → Accessibility → add Circadia")
             self.line2.setText(l2)
 
@@ -552,17 +564,32 @@ class Dashboard(QMainWindow):
     def _play_ab(self, which: str):
         self.ctl.play(which)
         self.blind_result.setText("")
+        self.stop_btn.show()                      # something is playing now
+        self.week_btn.setText("Play My Week")
 
     def _vote(self, which: str):
         self.ctl.stop_playback()
+        self.stop_btn.hide()
         res = self.ctl.vote(which)
         good = res.startswith("✔")
         self.blind_result.setText(res)
         self.blind_result.setStyleSheet(
             f"color:{'#30d158' if good else '#ff453a'};font-size:13px;")
 
+    def _stop_playback(self):
+        """Stop whatever is playing (day A/B or the week album)."""
+        self.ctl.stop_playback()
+        self.week_btn.setText("Play My Week")
+        self.stop_btn.hide()
+        if self.blind.isVisible():
+            self.line2.setText("stopped")
+
     def _render_week(self):
         if getattr(self, "_week_rendering", False):
+            return
+        # second press while the album plays = stop, do not re-render
+        if self.ctl.player.playing and self._week_path:
+            self._stop_playback()
             return
         self._week_rendering = True
         self.week_btn.setText("composing…")
@@ -588,7 +615,9 @@ class Dashboard(QMainWindow):
         self._week_path = os.path.join(config.RENDER_DIR, result["id"],
                                        "week.wav")
         self.ctl.player.play(self._week_path)
-        self.line2.setText(f"playing your week — {len(result['dates'])} "
+        self.week_btn.setText("■  Stop")
+        self.stop_btn.show()
+        self.line2.setText(f"playing your week, {len(result['dates'])} "
                            f"days, {len(result['dates']) * 42} seconds")
 
     def closeEvent(self, e):

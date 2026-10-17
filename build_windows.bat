@@ -1,5 +1,5 @@
 @echo off
-rem Build Dayplayer.exe — run this on a Windows machine with Python 3.11+.
+rem Build Dayplayer.exe, run this on a Windows machine with Python 3.11+.
 rem Result: dist\Dayplayer.exe (single file, no install needed).
 python -m venv .venv || goto :err
 .venv\Scripts\pip install -q -r requirements.txt pyinstaller || goto :err

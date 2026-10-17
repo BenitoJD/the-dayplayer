@@ -1,6 +1,6 @@
 """Generate the Circadia app icon (procedural, no external assets).
 
-Design: a *circadian ring* — 24 hours as bars around a circle. Heights
+Design: a *circadian ring*, 24 hours as bars around a circle. Heights
 follow the day arc (tall at noon on top, quiet at night at the bottom);
 color rides the same arc: warm amber daylight → deep indigo night →
 first cyan of dawn. A play glyph sits at the heart; a thin orbital

@@ -1,4 +1,4 @@
-"""Circadia Live — real-time sonification of your working state.
+"""Circadia Live, real-time sonification of your working state.
 
 Tails the day's log (works whether the recorder is the menu bar app,
 the tray app, or an embedded one), classifies the last 60 seconds into
@@ -10,7 +10,7 @@ with your state:
   DRIFT  a slow airy wash
   MIRE   a quiet low tone, breathing
 
-No scores, no numbers pushed at you — the sound IS the mirror.
+No scores, no numbers pushed at you, the sound IS the mirror.
 (Audio needs `sounddevice`; analysis works without it.)
 """
 from __future__ import annotations
@@ -226,7 +226,7 @@ class LiveEngine:
         """sounddevice output-stream callback: (outdata, frames, time, status).
 
         Wrapped in try/except: a bug in the synth must never spam or kill
-        the audio thread — we just go quiet for that block instead.
+        the audio thread, we just go quiet for that block instead.
         """
         try:
             self._render_block(outdata, frames)

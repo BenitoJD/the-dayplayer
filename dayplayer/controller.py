@@ -63,7 +63,7 @@ def open_dashboard_window():
 
 class Controller:
     def __init__(self, notify=None):
-        # notify(title, message) — UI-appropriate notifications
+        # notify(title, message), UI-appropriate notifications
         self.notify = notify or (lambda title, message: None)
         self.player = Player()
         self.session: str | None = None
@@ -85,7 +85,7 @@ class Controller:
             return False
         from .recorder import macos_input_trusted
         if not macos_input_trusted():
-            # macOS drops keyboard events without accessibility trust —
+            # macOS drops keyboard events without accessibility trust,
             # say so, and show the exact pane they need (once) instead of
             # silently recording only mouse drift.
             self.notify(
@@ -116,7 +116,7 @@ class Controller:
             live = self.recording or (
                 bool(events) and time.time() - events[-1]["t"] < 90)
             n = len(events)
-            return (f"● Recording — {n:,} events today" if live
+            return (f"● Recording, {n:,} events today" if live
                     else f"○ Not recording ({n:,} today)")
         except Exception:
             return "○ Dayplayer" if not self.recording else "● Recording"
@@ -186,6 +186,6 @@ class Controller:
         correct = choice == meta["real_label"]
         real = meta["real_label"].upper()
         self.last_result = (
-            f"{'✔ Correct' if correct else '✘ Wrong'} — "
+            f"{'✔ Correct' if correct else '✘ Wrong'}, "
             f"your real day was {real}")
         return self.last_result

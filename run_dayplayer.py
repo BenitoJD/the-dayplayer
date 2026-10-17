@@ -1,4 +1,4 @@
-"""PyInstaller entry point — launches the native Dayplayer app
+"""PyInstaller entry point, launches the native Dayplayer app
 (menu bar on macOS, system tray on Windows). Pass --dashboard to open
 the dashboard window directly."""
 import sys

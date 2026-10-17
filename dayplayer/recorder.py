@@ -15,7 +15,7 @@ How it runs: ALWAYS as its own plain process.
 The GUI apps (menu bar, tray, dashboard, live window) never host the
 keyboard listener in-process: pynput's macOS keyboard context crashes
 inside a Cocoa/Qt application (its Carbon layout query collides with the
-GUI run loop — found the hard way with faulthandler). They spawn this
+GUI run loop, found the hard way with faulthandler). They spawn this
 module instead and watch the log, so one recorder feeds every window.
 """
 from __future__ import annotations
@@ -59,7 +59,7 @@ def recorder_running() -> bool:
     """True if a recorder process is alive RIGHT NOW.
 
     Two explicit signals, never inferred from log freshness (which kept
-    a dead recorder looking alive for 90 seconds — a ghost ● in the UI):
+    a dead recorder looking alive for 90 seconds, a ghost ● in the UI):
       · the pid we spawned, still alive
       · the liveness heartbeat file, touched every few seconds
     """
@@ -286,14 +286,14 @@ def macos_input_trusted(refresh: bool = False) -> bool:
     """True if THIS process may monitor input on macOS.
 
     Without accessibility trust the OS silently drops every key/mouse
-    event — the recorder looks alive but hears nothing. We check so the
+    event, the recorder looks alive but hears nothing. We check so the
     app can say so out loud instead of pretending.
 
     The framework is loaded ONCE and the answer cached: macOS decides
     trust at process start (granting later needs a restart anyway), and
     re-loading the framework from a different thread than pynput's
     Carbon-using listener thread crashed the process (learned the hard
-    way — faulthandler showed the two threads colliding).
+    way, faulthandler showed the two threads colliding).
     """
     global _AX_LIB, _TRUST_CACHE
     if sys.platform != "darwin":
@@ -422,7 +422,7 @@ def main():
             pass
     try:
         rec.start()
-        print("● Circadia recording — only timings, never content.")
+        print("● Circadia recording, only timings, never content.")
         print(f"  Log: {config.log_path()}")
         print("  Stop with Ctrl-C, or from the app menu.")
         if sys.platform == "darwin" and not macos_input_trusted():

@@ -1,6 +1,6 @@
 """The composer: per-minute behavioral features -> a music "score".
 
-The mapping (documented so it can be revised — the CONCEPT stays):
+The mapping (documented so it can be revised, the CONCEPT stays):
 
   typing energy        -> driving percussion (tick density & velocity)
   rhythm steadiness    -> quantized pulse when steady, skittering
@@ -25,7 +25,7 @@ from . import config
 PENTATONIC = [57, 60, 62, 64, 67]
 ROOT = 45          # A2
 FIFTH = 52         # E3
-TENSION = 46       # Bb2 — the uneasy one
+TENSION = 46       # Bb2, the uneasy one
 
 
 def _norm(value, scale):

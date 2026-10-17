@@ -120,9 +120,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({
                 "correct": correct,
                 "real_label": meta["real_label"],
-                "message": ("Correct — that was your real day."
+                "message": ("Correct, that was your real day."
                             if correct else
-                            "Wrong — the real one was the other player."),
+                            "Wrong, the real one was the other player."),
             })
         self.send_error(404)
 

@@ -1,11 +1,11 @@
-"""Named usage patterns — the shared vocabulary (docs/PRINCIPLES.md).
+"""Named usage patterns, the shared vocabulary (docs/PRINCIPLES.md).
 
 Descriptive, not judgmental: these are *patterns*, never scores.
 
-  FLOW   steady, sustained typing — the work is carrying you
-  FLAIL  mod-keys + app switches — hunting, interrupting, context juggling
+  FLOW   steady, sustained typing, the work is carrying you
+  FLAIL  mod-keys + app switches, hunting, interrupting, context juggling
   DRIFT  mouse/scroll wandering, little typing
-  MIRE   near-silence — meetings, reading, gone-for-coffee, thinking
+  MIRE   near-silence, meetings, reading, gone-for-coffee, thinking
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ PATTERN_META = {
     FLOW:  {"label": "Flow",  "color": "#f0b429", "desc": "steady, sustained typing"},
     FLAIL: {"label": "Flail", "color": "#ef6c57", "desc": "alt-tab storms, context juggling"},
     DRIFT: {"label": "Drift", "color": "#5b8def", "desc": "mouse wandering, little typing"},
-    MIRE:  {"label": "Mire",  "color": "#3a4256", "desc": "quiet stretch — meeting, reading, thinking"},
+    MIRE:  {"label": "Mire",  "color": "#3a4256", "desc": "quiet stretch, meeting, reading, thinking"},
 }
 
 

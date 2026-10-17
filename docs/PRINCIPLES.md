@@ -13,13 +13,13 @@ me") dies and we're a fitness tracker with reverb.
 
 No manager dashboards, no team comparisons by default, no B2B surveillance
 version. One "boss listens to employees' days" news story kills the trust
-brand forever. (Opt-in duets between friends are different — both sides
+brand forever. (Opt-in duets between friends are different, both sides
 press play.)
 
 ## 3. Revise the mapping, never the concept
 
 If renders sound like mush, the **mapping** (features → music) gets revised.
-The concept — timings only, day → piece, blind test as gate — stays.
+The concept, timings only, day → piece, blind test as gate, stays.
 
 ## 4. The blind test is the gate
 
@@ -39,7 +39,7 @@ See TRUST.md.
 
 ## Roadmap shape
 
-- **Stage 1 (now):** Python proof — recorder, composer, synth, blind test.
+- **Stage 1 (now):** Python proof, recorder, composer, synth, blind test.
   Gate: distinguishability, tested by a human (you).
 - **Stage 2:** Tauri shell for double-click install (Mac .dmg + Windows
   .msi), signed/notarized, auto-update; web share-player for renders.
