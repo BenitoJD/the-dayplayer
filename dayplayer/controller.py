@@ -15,7 +15,6 @@ import time
 
 from . import config, features, pipeline
 from .playback import Player
-from .recorder import Recorder
 
 
 def open_live_window():
@@ -48,7 +47,6 @@ class Controller:
     def __init__(self, notify=None):
         # notify(title, message) — UI-appropriate notifications
         self.notify = notify or (lambda title, message: None)
-        self.recorder = Recorder()
         self.player = Player()
         self.session: str | None = None
         self.last_result: str | None = None
@@ -56,21 +54,36 @@ class Controller:
     # ---------------------------------------------------------- recording
     @property
     def recording(self) -> bool:
-        return self.recorder.running
+        """A recorder process is running (never in this GUI process)."""
+        from .recorder import recorder_running
+        return recorder_running()
 
     def start_recording(self) -> bool:
+        from .recorder import spawn_recorder
         if self.recording:
             return True
-        try:
-            self.recorder.start()
-            return True
-        except Exception as e:
-            self.notify("Could not start", str(e))
+        if not spawn_recorder():
+            self.notify("Could not start", "recorder process failed to spawn")
             return False
+        from .recorder import macos_input_trusted
+        if not macos_input_trusted():
+            # macOS drops every event without accessibility trust —
+            # say so instead of silently recording nothing.
+            self.notify(
+                "macOS is blocking input",
+                "Grant access in System Settings → Privacy & Security → "
+                "Accessibility (add Circadia), then restart the app.")
+        return True
+
+    @property
+    def trusted(self) -> bool:
+        from .recorder import macos_input_trusted
+        return macos_input_trusted()
 
     def stop_recording(self):
+        from .recorder import stop_recorder
         if self.recording:
-            self.recorder.stop()
+            stop_recorder()
             self.notify("Recording stopped",
                         "Your log is saved in ~/.dayplayer")
 
@@ -94,11 +107,11 @@ class Controller:
     def has_any_data(self) -> bool:
         return bool(features.load_events())
 
-    def render(self, done):
-        """Render today in a worker thread; done(result) when finished."""
+    def render(self, done, date: str | None = None):
+        """Render a day (default today) in a worker thread."""
         def worker():
             try:
-                result = pipeline.render_day()
+                result = pipeline.render_day(date)
             except Exception as e:                     # keep the app alive
                 result = {"error": "crash", "message": str(e)}
             try:

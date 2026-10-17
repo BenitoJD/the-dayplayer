@@ -118,6 +118,33 @@ Test the whole chain without recording anything:
 .venv/bin/python tests/test_synthetic.py
 ```
 
+## Testing
+
+```
+.venv/bin/python tests/test_synthetic.py   # pipeline: events → features → score → WAV
+.venv/bin/python tests/test_v2.py          # live states, audio callback, week, tags
+.venv/bin/python tests/test_e2e.py         # REAL capture + live tail + render + blind
+.venv/bin/python tests/test_ui.py          # drives the actual window (QtTest)
+```
+
+`test_e2e` reports capture honestly: mouse events usually flow immediately,
+keyboard events need the one-time macOS Accessibility grant (see below). The
+UI test clicks the real buttons: render → blind panel → wrong vote → right
+vote → tag → live toggle → record toggle (which must spawn a *separate*
+recorder process).
+
+**Why the recorder is always its own process:** pynput's macOS keyboard
+listener crashes inside any Cocoa/Qt app (its Carbon keyboard-layout query
+collides with the GUI run loop — found with `faulthandler`). The apps spawn
+`python -m dayplayer.recorder` and watch the log; one recorder feeds every
+window, and closing a window never stops your recording.
+
+## macOS permission (one time)
+
+Real keyboard capture needs **System Settings → Privacy & Security →
+Accessibility → add Circadia.app**, then restart the app. Without it the app
+says so instead of pretending to record. Windows needs no permission.
+
 ## Privacy
 
 See **[docs/TRUST.md](docs/TRUST.md)** — the short version: raw logs never

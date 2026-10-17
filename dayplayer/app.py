@@ -159,6 +159,10 @@ class DayplayerApp(rumps.App):
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
+    if "--record" in argv:                       # detached recorder process
+        from .recorder import main as record_main
+        record_main()
+        return
     if "--dashboard" in argv:
         from .dashboard import main as dash_main
         dash_main()

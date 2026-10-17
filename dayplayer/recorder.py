@@ -1,4 +1,4 @@
-"""The Dayplayer recorder.
+"""The Dayplayer / Circadia recorder.
 
 Records ONLY input timing and coarse event classes:
   keyboard  -> down/up timestamps + class (letter/space/tab/mod/...)
@@ -8,15 +8,23 @@ Records ONLY input timing and coarse event classes:
 NEVER RECORDED: characters typed, file names, URLs, window titles,
 clipboard, screen content, anything readable. See docs/TRUST.md.
 
-Two ways to run:
-  CLI:  python3 -m dayplayer.recorder
-  App:  dayplayer.app.Recorder (embedded, started/stopped from menu bar)
+How it runs: ALWAYS as its own plain process.
+
+  python3 -m dayplayer.recorder        (CLI / spawned by the apps)
+
+The GUI apps (menu bar, tray, dashboard, live window) never host the
+keyboard listener in-process: pynput's macOS keyboard context crashes
+inside a Cocoa/Qt application (its Carbon layout query collides with the
+GUI run loop — found the hard way with faulthandler). They spawn this
+module instead and watch the log, so one recorder feeds every window.
 """
 from __future__ import annotations
 
 import json
 import math
 import os
+import signal
+import subprocess
 import sys
 import threading
 import time
@@ -24,6 +32,104 @@ import time
 from pynput import keyboard, mouse
 
 from . import config
+
+PID_FILE = os.path.join(config.DATA_DIR, "recorder.pid")
+ALIVE_FILE = os.path.join(config.DATA_DIR, "recorder.alive")
+ALIVE_STALE_SECONDS = 20          # heartbeat lands every 5s
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False
+
+
+def touch_alive():
+    try:
+        config.ensure_dirs()
+        with open(ALIVE_FILE, "w") as fh:
+            fh.write(str(time.time()))
+    except Exception:
+        pass
+
+
+def recorder_running() -> bool:
+    """True if a recorder process is alive RIGHT NOW.
+
+    Two explicit signals, never inferred from log freshness (which kept
+    a dead recorder looking alive for 90 seconds — a ghost ● in the UI):
+      · the pid we spawned, still alive
+      · the liveness heartbeat file, touched every few seconds
+    """
+    try:
+        with open(PID_FILE) as fh:
+            pid = int(fh.read().strip())
+        if _pid_alive(pid):
+            return True
+    except Exception:
+        pass
+    try:
+        return (time.time() - os.path.getmtime(ALIVE_FILE)
+                < ALIVE_STALE_SECONDS)
+    except Exception:
+        return False
+
+
+def spawn_recorder() -> bool:
+    """Start the recorder as a detached background process."""
+    if recorder_running():
+        return True
+    config.ensure_dirs()
+    if getattr(sys, "frozen", False):              # PyInstaller exe
+        cmd = [sys.executable, "--record"]
+        cwd = None
+    else:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cmd = [sys.executable, "-m", "dayplayer.recorder"]
+        cwd = root
+    kwargs = {}
+    if os.name == "posix":
+        kwargs["start_new_session"] = True         # survive app exit
+    else:
+        kwargs["creationflags"] = 0x00000008       # DETACHED_PROCESS
+    try:
+        proc = subprocess.Popen(
+            cmd, cwd=cwd, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, **kwargs)
+    except Exception:
+        return False
+    try:
+        with open(PID_FILE, "w") as fh:
+            fh.write(str(proc.pid))
+    except Exception:
+        pass
+    return True
+
+
+def stop_recorder() -> bool:
+    """Stop the detached recorder process, if one is running."""
+    pid = None
+    try:
+        with open(PID_FILE) as fh:
+            pid = int(fh.read().strip())
+    except Exception:
+        pass
+    if pid and _pid_alive(pid):
+        try:
+            if os.name == "posix":
+                os.kill(pid, signal.SIGTERM)
+            else:
+                subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                               capture_output=True)
+        except Exception:
+            return False
+    try:
+        os.remove(PID_FILE)
+    except Exception:
+        pass
+    return True
 
 
 class JsonlWriter:
@@ -165,6 +271,48 @@ def heartbeat(writer: JsonlWriter, stop: threading.Event):
         stop.wait(60.0)
 
 
+def alive_beat(writer: JsonlWriter, stop: threading.Event):
+    """Cheap liveness signal for the UI (no log noise)."""
+    while not stop.is_set():
+        touch_alive()
+        stop.wait(5.0)
+
+
+_AX_LIB = None
+_TRUST_CACHE: bool | None = None
+
+
+def macos_input_trusted(refresh: bool = False) -> bool:
+    """True if THIS process may monitor input on macOS.
+
+    Without accessibility trust the OS silently drops every key/mouse
+    event — the recorder looks alive but hears nothing. We check so the
+    app can say so out loud instead of pretending.
+
+    The framework is loaded ONCE and the answer cached: macOS decides
+    trust at process start (granting later needs a restart anyway), and
+    re-loading the framework from a different thread than pynput's
+    Carbon-using listener thread crashed the process (learned the hard
+    way — faulthandler showed the two threads colliding).
+    """
+    global _AX_LIB, _TRUST_CACHE
+    if sys.platform != "darwin":
+        return True
+    if _TRUST_CACHE is not None and not refresh:
+        return _TRUST_CACHE
+    try:
+        if _AX_LIB is None:
+            import ctypes
+            _AX_LIB = ctypes.cdll.LoadLibrary(
+                "/System/Library/Frameworks/ApplicationServices.framework/"
+                "ApplicationServices")
+            _AX_LIB.AXIsProcessTrusted.restype = ctypes.c_bool
+        _TRUST_CACHE = bool(_AX_LIB.AXIsProcessTrusted())
+    except Exception:
+        _TRUST_CACHE = False
+    return _TRUST_CACHE
+
+
 # --------------------------------------------------------------- Recorder
 class Recorder:
     """Embeddable recorder: start()/stop(), event count, live flag."""
@@ -176,6 +324,7 @@ class Recorder:
         self._mse = None
         self._threads: list[threading.Thread] = []
         self.count = 0
+        self.trusted = True
 
     @property
     def running(self) -> bool:
@@ -185,8 +334,11 @@ class Recorder:
         if self.running:
             return
         config.ensure_dirs()
+        self.trusted = macos_input_trusted()
         self._stop = threading.Event()
         self.writer = JsonlWriter()
+        self.writer.write({"type": "start"})       # explicit liveness marker
+        touch_alive()
         self.count = 0
         mth = MouseMoveThrottle(config.MOUSE_MOVE_MIN_PX)
         w = self.writer
@@ -197,26 +349,30 @@ class Recorder:
                 fn(*a, **kw)
             return inner
 
+        # NOTE: on macOS pynput appends an `injected` flag to every
+        # callback, so all handlers accept *args (learned the hard way:
+        # without it every real event raised TypeError and nothing was
+        # ever recorded).
         @count
-        def on_press(key):
+        def on_press(key, *args):
             w.write({"type": "kd", "c": _key_class(key)})
 
         @count
-        def on_release(key):
+        def on_release(key, *args):
             w.write({"type": "ku", "c": _key_class(key)})
 
         @count
-        def on_move(x, y):
+        def on_move(x, y, *args):
             d = mth.distance(x, y)
             if d is not None:
                 w.write({"type": "mm", "d": d})
 
         @count
-        def on_click(x, y, button, pressed):
+        def on_click(x, y, button, pressed, *args):
             w.write({"type": "mc", "b": button.name, "down": pressed})
 
         @count
-        def on_scroll(x, y, dx, dy):
+        def on_scroll(x, y, dx, dy, *args):
             w.write({"type": "ms", "dy": (1 if dy > 0 else -1),
                      "n": min(abs(int(dy)), 9)})
 
@@ -225,7 +381,7 @@ class Recorder:
         self._mse = mouse.Listener(on_move=on_move, on_click=on_click,
                                    on_scroll=on_scroll)
         self._mse.start()
-        for target in (window_watcher, heartbeat):
+        for target in (window_watcher, heartbeat, alive_beat):
             t = threading.Thread(target=target,
                                  args=(self.writer, self._stop), daemon=True)
             t.start()
@@ -239,23 +395,42 @@ class Recorder:
             if l:
                 l.stop()
         self._kbd = self._mse = None
+        try:
+            self.writer.write({"type": "stop"})    # explicit stop marker
+        except Exception:
+            pass
         self.writer.close()
         self.writer = None
+        try:
+            os.remove(ALIVE_FILE)                  # no ghost ● in the UI
+        except Exception:
+            pass
 
 
 # ------------------------------------------------------------------- CLI
 def main():
     rec = Recorder()
+    shutdown = threading.Event()
+
+    def on_term(*_args):
+        shutdown.set()                             # clean stop on SIGTERM
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, on_term)
+        except Exception:
+            pass
     try:
         rec.start()
-        print("● Dayplayer recording — only timings, never content.")
+        print("● Circadia recording — only timings, never content.")
         print(f"  Log: {config.log_path()}")
-        print("  Stop with Ctrl-C.")
-        if sys.platform == "darwin":
-            print("  (If no events appear: grant Input Monitoring to your")
-            print("   terminal app in System Settings → Privacy & Security.)")
-        while True:
-            time.sleep(1)
+        print("  Stop with Ctrl-C, or from the app menu.")
+        if sys.platform == "darwin" and not macos_input_trusted():
+            print("  !! macOS has NOT granted input access to this process.")
+            print("     System Settings → Privacy & Security → Accessibility")
+            print("     → add the app (Circadia), then restart it.")
+        while not shutdown.is_set():
+            time.sleep(0.3)
     except KeyboardInterrupt:
         pass
     finally:

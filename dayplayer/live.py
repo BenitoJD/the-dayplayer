@@ -22,7 +22,6 @@ import time
 from collections import deque
 
 from . import config, patterns
-from .recorder import Recorder
 
 SR = 44100
 BLOCK = 512
@@ -33,6 +32,9 @@ SMOOTH = 1.6             # state crossfade time (seconds)
 class LiveEngine:
     def __init__(self, log_path: str | None = None):
         self.log_path = log_path or config.today_log_path()
+        self._fixed_path = log_path                    # honored while same day
+        self._fixed_date = time.strftime("%Y-%m-%d")
+        self.trusted = True                            # set in start()
         self.state = patterns.MIRE
         self.weights = {k: 1.0 if k == patterns.MIRE else 0.0
                         for k in patterns.PATTERN_META}
@@ -41,7 +43,7 @@ class LiveEngine:
         self.gain = 0.7
         self.audio_on = False
         self._events: deque[dict] = deque()
-        self._own_recorder: Recorder | None = None
+        self.started_recorder = False          # did WE spawn the recorder?
         self._stop = threading.Event()
         self._med_key_ema = 40.0
         self._stream = None
@@ -55,6 +57,8 @@ class LiveEngine:
     def start(self, with_audio: bool = True):
         if self.running:
             return
+        from .recorder import macos_input_trusted
+        self.trusted = macos_input_trusted()
         self.running = True
         self._stop.clear()
         self._maybe_start_recorder()
@@ -72,27 +76,24 @@ class LiveEngine:
                 pass
             self._stream = None
         self.audio_on = False
-        if self._own_recorder:
-            self._own_recorder.stop()
-            self._own_recorder = None
+        # the recorder keeps running on purpose: recording is the app's
+        # job, live mode is just a listener (stop it from the menu/tray)
         self.running = False
 
     # ----------------------------------------------------------- inputs
     def _maybe_start_recorder(self):
-        """If nobody is recording, embed our own (still timing-only)."""
+        """If nobody is recording, spawn the recorder PROCESS.
+
+        Never in-process: pynput's macOS keyboard listener crashes inside
+        a Cocoa/Qt app, and Qt windows are exactly where live mode runs.
+        """
+        from .recorder import recorder_running, spawn_recorder
         try:
-            with open(self.log_path) as fh:
-                lines = fh.readlines()[-5:]
-            fresh = any(time.time() - json.loads(l)["t"] < 90
-                        for l in lines if l.strip())
-        except (FileNotFoundError, json.JSONDecodeError, KeyError):
-            fresh = False
-        if not fresh:
-            self._own_recorder = Recorder()
-            try:
-                self._own_recorder.start()
-            except Exception:
-                self._own_recorder = None
+            if recorder_running():
+                return
+            self.started_recorder = spawn_recorder()
+        except Exception:
+            self.started_recorder = False
 
     def _tail_loop(self):
         """Follow the day's log file like `tail -f`."""
@@ -100,11 +101,16 @@ class LiveEngine:
         cur_date = time.strftime("%Y-%m-%d")
         while not self._stop.is_set():
             try:
-                if fh is None or time.strftime("%Y-%m-%d") != cur_date:
+                today = time.strftime("%Y-%m-%d")
+                if fh is None or today != cur_date:
                     if fh:
                         fh.close()
-                    cur_date = time.strftime("%Y-%m-%d")
-                    self.log_path = config.log_path(cur_date)
+                    cur_date = today
+                    # honor a caller-provided path while it's still that day
+                    if self._fixed_path and today == self._fixed_date:
+                        self.log_path = self._fixed_path
+                    else:
+                        self.log_path = config.log_path(today)
                     fh = open(self.log_path)
                     fh.seek(0, 2)                  # jump to end
                 line = fh.readline()
@@ -117,11 +123,11 @@ class LiveEngine:
                     while self._events and now - self._events[0]["t"] > 120:
                         self._events.popleft()
                 else:
-                    time.sleep(0.5)
+                    time.sleep(0.3)
             except FileNotFoundError:
-                time.sleep(1.0)
+                time.sleep(0.5)
             except Exception:
-                time.sleep(1.0)
+                time.sleep(0.5)
 
     # --------------------------------------------------------- analysis
     def _tick_loop(self):
@@ -206,7 +212,21 @@ class LiveEngine:
         self._ph[key] = float(ph[-1])
         return ph
 
-    def _audio_cb(self, indata, outdata, frames, time_info, status):
+    def _audio_cb(self, outdata, frames, time_info, status):
+        """sounddevice output-stream callback: (outdata, frames, time, status).
+
+        Wrapped in try/except: a bug in the synth must never spam or kill
+        the audio thread — we just go quiet for that block instead.
+        """
+        try:
+            self._render_block(outdata, frames)
+        except Exception:
+            try:
+                outdata.fill(0)
+            except Exception:
+                pass
+
+    def _render_block(self, outdata, frames):
         np = self.np
         n = frames
         t_now = time.time()

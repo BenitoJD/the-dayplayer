@@ -172,6 +172,11 @@ class LiveWindow(QMainWindow):
         self.state_lab.setText(meta["label"].upper())
         self.state_lab.setStyleSheet(
             f"font-size:22px;font-weight:700;color:{meta['color']};")
+        if self.engine.running and not self.engine.trusted:
+            self.stats.setText(
+                "macOS isn't sharing input yet — grant Accessibility "
+                "access to Circadia, then restart it")
+            return
         if not self.calm.isChecked():
             self.stats.setText(
                 f"{self.engine.cps:.1f} keys/s"

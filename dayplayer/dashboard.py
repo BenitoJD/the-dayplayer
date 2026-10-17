@@ -188,7 +188,7 @@ def day_sentence(s: dict, live: bool, today: bool) -> list[str]:
         if today:
             return ["Your day hasn't spoken yet.",
                     "Press record — then just live it."]
-        return ["Nothing recorded this day."]
+        return ["Nothing recorded this day.", ""]
     counts = s["counts"]
     flow_min = counts[patterns.FLOW]
     flail_min = counts[patterns.FLAIL]
@@ -381,13 +381,18 @@ class Dashboard(QMainWindow):
         return d.isoformat()
 
     def _is_today(self) -> bool:
-        return self._selected_offset == 0
+        if self._selected_offset != 0:
+            return False
+        # an explicitly opened historical date is not "today"
+        if self.date and self.date != time.strftime("%Y-%m-%d"):
+            return False
+        return True
 
     def _refresh(self):
         d = self._day_offset()
         s = patterns.day_summary(d)
         today = self._is_today()
-        live = self._live()
+        live = self.ctl.recording        # true process liveness, not freshness
         self.ring.set_day(s, today)
 
         # rec control
@@ -415,6 +420,10 @@ class Dashboard(QMainWindow):
             l1, l2 = day_sentence(s, live, today)
             self.line1.setText(l1)
             self.line1.setStyleSheet("")
+            # honest hint when macOS is silently dropping our input
+            if not self.ctl.trusted:
+                l2 = ("macOS hasn't granted input access — System Settings → "
+                      "Privacy & Security → Accessibility → add Circadia")
             self.line2.setText(l2)
 
         # week dots
@@ -497,8 +506,6 @@ class Dashboard(QMainWindow):
     def _toggle_record(self):
         if self.ctl.recording:
             self.ctl.stop_recording()
-        elif self._live():
-            pass                                # someone else records
         else:
             self.ctl.start_recording()
         self._refresh()
@@ -521,13 +528,15 @@ class Dashboard(QMainWindow):
     def _render(self):
         if self._rendering:
             return
-        if not (self.ctl.recording or self._live()
-                or self.ctl.has_any_data()):
-            self.line2.setText("record something first — then play it back")
+        from . import features
+        selected = self._day_offset()
+        has_data = bool(features.extract(selected)["minutes"])
+        if not has_data:
+            self.line2.setText("nothing recorded on this day yet")
             return
         self._rendering = True
         self.play_btn.setText("composing…")
-        self.ctl.render(self._render_done_sig.emit)
+        self.ctl.render(self._render_done_sig.emit, date=selected)
 
     def _on_render_done(self, result: dict):
         self._rendering = False

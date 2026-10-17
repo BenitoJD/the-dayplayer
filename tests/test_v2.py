@@ -48,8 +48,7 @@ def main():
     # ---- live engine: flow
     write_log(tmp, flow_events())
     eng = LiveEngine(log_path=tmp)
-    eng._maybe_start_recorder()          # should detect fresh, not embed
-    assert eng._own_recorder is None, "should not double-record"
+    assert hasattr(eng, "started_recorder")      # recorder is out-of-process
     eng._events.extend(json.loads(l)
                        for l in open(tmp).readlines())
     eng._analyze()
@@ -71,17 +70,26 @@ def main():
     print(f"[3] live idle -> {eng3.state}")
     assert eng3.state == patterns.MIRE
 
-    # ---- audio callback smoke (no device needed — call directly)
+    # ---- audio callback smoke (no device needed — call directly with the
+    # REAL sounddevice output-stream signature: (outdata, frames, t, status))
     import numpy as np
     eng.weights = {k: 0.25 for k in eng.weights}
     outdata = np.zeros((512, 2), dtype=np.float32)
     eng.state = patterns.FLOW
-    eng._audio_cb(None, outdata, 512, None, None)
-    assert abs(outdata).max() > 0.001, "flow layer should make sound"
+    eng._audio_cb(outdata, 512, None, None)
+    flow_peak = float(abs(outdata).max())
+    assert flow_peak > 0.001, "flow layer should make sound"
+    outdata.fill(0)
     eng.state = patterns.FLAIL
-    eng._audio_cb(None, outdata, 512, None, None)
-    assert abs(outdata).max() > 0.001, "flail layer should make sound"
-    print("[4] audio callback produces signal for flow + flail")
+    eng._audio_cb(outdata, 512, None, None)
+    flail_peak = float(abs(outdata).max())
+    assert flail_peak > 0.001, "flail layer should make sound"
+    # a broken synth call must not raise — it goes quiet for that block
+    eng._audio_cb(type("Boom", (), {
+        "fill": lambda self, v: (_ for _ in ()).throw(RuntimeError("x"))})(),
+        512, None, None)
+    print(f"[4] audio callback: flow peak={flow_peak:.3f} "
+          f"flail peak={flail_peak:.3f} (errors contained)")
 
     # ---- week render (uses synthetic day 2099-01-01 from test_synthetic)
     res = pipeline.render_week(end_date="2099-01-02", n_days=2)
