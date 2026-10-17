@@ -43,11 +43,32 @@ def load_events(date: str | None = None) -> list[dict]:
     return events
 
 
+_EXTRACT_CACHE: dict = {}          # path -> (stat-key, result)
+
+
 def extract(date: str | None = None) -> dict:
-    """Return {'minutes': [features...], 'meta': {...}} for a day."""
+    """Return {'minutes': [features...], 'meta': {...}} for a day.
+
+    Cached by file mtime+size: the dashboard polls seven days every few
+    seconds, and re-parsing a heavy day's log each time is wasteful. The
+    live (today) file changes constantly, so it simply recomputes.
+    """
+    import os
+    path = config.log_path(date)
+    try:
+        st = os.stat(path)
+        key = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        _EXTRACT_CACHE.pop(path, None)
+        return {"minutes": [], "meta": {"date": date, "empty": True}}
+    hit = _EXTRACT_CACHE.get(path)
+    if hit and hit[0] == key:
+        return hit[1]
     events = [e for e in load_events(date) if e.get("type") in INPUT_TYPES
               or e.get("type") == "win"]
-    return features_from_events(events, date)
+    result = features_from_events(events, date)
+    _EXTRACT_CACHE[path] = (key, result)
+    return result
 
 
 def features_from_events(events: list[dict], date: str | None = None) -> dict:

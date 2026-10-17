@@ -56,7 +56,7 @@ def correlations() -> list[dict]:
     days = {}
     for path in glob.glob(os.path.join(config.LOG_DIR, "*.jsonl")):
         m = re.match(r"(\d{4}-\d{2}-\d{2})\.jsonl$", os.path.basename(path))
-        if m and not m.group(1).startswith("2099-"):   # skip synthetic data
+        if m:
             s = patterns.day_summary(m.group(1))
             if not s.get("empty"):
                 days[m.group(1)] = s

@@ -32,6 +32,7 @@ from dayplayer import config, features, pipeline      # noqa: E402
 from dayplayer.live import LiveEngine                 # noqa: E402
 from dayplayer.patterns import FLOW, FLAIL, MIRE      # noqa: E402
 from dayplayer.recorder import Recorder               # noqa: E402
+from fixtures import isolate_dirs, write_synthetic_day  # noqa: E402
 
 
 def ax_trusted() -> bool:
@@ -78,6 +79,10 @@ def type_flail(controller, seconds=6.0):
 
 
 def main():
+    import tempfile
+    isolate_dirs(tempfile.mkdtemp())      # keep real ~/.dayplayer untouched
+    write_synthetic_day("2099-01-01", config.LOG_DIR)   # render fixture
+    write_synthetic_day("2099-01-02", config.LOG_DIR)   # week fixture
     config.ensure_dirs()
     today = config.today_log_path()
     results = {}

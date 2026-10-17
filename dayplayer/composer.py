@@ -62,6 +62,9 @@ def compose(feature_data: dict, seed: int | None = None,
 
     idle_run = 0
     idle_start = None
+    tick_carry = 0.0          # fractional notes carry across minutes, so the
+    flail_carry = 0.0         # density survives ANY day length (a 24h day
+    last_kick = -9.0          # used to render completely silent)
     for i, m in enumerate(minutes):
         t0 = i * spm
 
@@ -80,8 +83,11 @@ def compose(feature_data: dict, seed: int | None = None,
         intensity = _norm(m["key_rate"], k_hi)
         cv = m["key_cv"]
         # density: 0.3 floor for any real typing, up to ~7 ticks/s
-        n_ticks = int((0.3 + 0.7 * intensity) * spm * 7
-                      if m["key_rate"] >= 5 else intensity * spm * 4)
+        want = ((0.3 + 0.7 * intensity) * spm * 7
+                if m["key_rate"] >= 5 else intensity * spm * 4)
+        tick_carry += want
+        n_ticks = int(tick_carry)
+        tick_carry -= n_ticks
         if n_ticks > 0:
             steady = cv is not None and cv < 0.55
             grid = [t0 + j * eighth for j in range(int(spm / eighth) + 1)]
@@ -95,14 +101,22 @@ def compose(feature_data: dict, seed: int | None = None,
                 tracks["tick"].append({
                     "t": round(t, 3), "vel": 0.35 + 0.55 * intensity,
                     "jitter": round(jitter, 3)})
-            if m["burst"] > 2.2 or m["key_rate"] > k_med * 1.4:
+            # accents, but never closer than ~1.6s (keeps kick a pulse,
+            # not a machine gun, on very long days)
+            busy = (m["burst"] > 2.2 or m["key_rate"] > k_med * 1.4
+                    or m["key_rate"] >= k_hi)
+            if busy and (t0 - last_kick) >= 1.6:
+                last_kick = t0
                 tracks["kick"].append({"t": round(t0, 3),
                                        "vel": 0.5 + 0.4 * intensity})
 
         # ---- the Flail: mod-keys + app switches
         flail_n = int(m["mod_rate"] + 2 * m["switches"])
         if flail_n >= config.HIGH_SWITCHES_PER_MIN or flail_n >= 3:
-            for _ in range(min(flail_n, int(spm * 4))):
+            flail_carry += min(flail_n, spm * 4)
+            n_flail = int(flail_carry)
+            flail_carry -= n_flail
+            for _ in range(n_flail):
                 octave = rng.choice([0, 12, 12, 24])   # register jumps
                 note = rng.choice(PENTATONIC) + octave
                 tracks["flail"].append({

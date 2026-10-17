@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,9 +22,15 @@ from PySide6.QtWidgets import QApplication           # noqa: E402
 
 from dayplayer import config, features               # noqa: E402
 from dayplayer.dashboard import Dashboard, QSS       # noqa: E402
+from fixtures import isolate_dirs, write_synthetic_day  # noqa: E402
 
 FIXTURE = "2099-01-01"
 HEADED = "--headed" in sys.argv
+TMP = tempfile.mkdtemp()
+isolate_dirs(TMP)                      # never touch real ~/.dayplayer data
+tags_file = os.path.join(TMP, "tags.json")
+from dayplayer import tags as _tags    # noqa: E402
+_tags.TAGS_FILE = tags_file
 
 
 def pump(app, seconds: float):
@@ -45,8 +52,8 @@ def wait_for(app, predicate, timeout=180.0):
 
 
 def main():
-    assert features.extract(FIXTURE)["minutes"], \
-        f"run tests/test_synthetic.py first ({FIXTURE} fixture missing)"
+    write_synthetic_day(FIXTURE, config.LOG_DIR)   # self-contained fixture
+    assert features.extract(FIXTURE)["minutes"]
     app = QApplication(sys.argv)
     app.setStyleSheet(QSS)
     win = Dashboard(FIXTURE)

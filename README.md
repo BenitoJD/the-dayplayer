@@ -121,11 +121,21 @@ Test the whole chain without recording anything:
 ## Testing
 
 ```
+.venv/bin/python tests/test_edges.py       # weird days, corrupt files, extremes
 .venv/bin/python tests/test_synthetic.py   # pipeline: events → features → score → WAV
 .venv/bin/python tests/test_v2.py          # live states, audio callback, week, tags
 .venv/bin/python tests/test_e2e.py         # REAL capture + live tail + render + blind
 .venv/bin/python tests/test_ui.py          # drives the actual window (QtTest)
 ```
+
+Every suite isolates itself into a temp data dir — your real `~/.dayplayer`
+is never touched by a test, and production code carries no test-only logic.
+
+Edge cases covered: a 24-hour day (it used to render *silent*), a
+one-minute day, a markers-only log, a corrupt or half-written JSONL line,
+a 40k-event day (cached parses), two renders in the same second, votes
+with no session, emoji/duplicate tags, a corrupt tags file, correlations
+with one tagged day, and browsing to a day that never existed.
 
 `test_e2e` reports capture honestly: mouse events usually flow immediately,
 keyboard events need the one-time macOS Accessibility grant (see below). The

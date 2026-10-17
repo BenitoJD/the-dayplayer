@@ -5,6 +5,7 @@ import json
 import os
 import random
 import time
+import uuid
 
 from . import composer, config, features, synth
 
@@ -13,7 +14,9 @@ def render_day(date: str | None = None, out_root: str | None = None):
     """Compose and render both versions. Returns session dict."""
     date = date or time.strftime("%Y-%m-%d")
     out_root = out_root or config.RENDER_DIR
-    session_id = time.strftime("%Y%m%d-%H%M%S")
+    # second-resolution stamps collide when two renders start together
+    session_id = (time.strftime("%Y%m%d-%H%M%S") + "-"
+                  + uuid.uuid4().hex[:4])
     out_dir = os.path.join(out_root, session_id)
     os.makedirs(out_dir, exist_ok=True)
 
@@ -83,7 +86,8 @@ def render_week(end_date: str | None = None, n_days: int = 7):
         return {"error": "no_data",
                 "message": "No recorded days found in the last week."}
 
-    session_id = "week-" + time.strftime("%Y%m%d-%H%M%S")
+    session_id = ("week-" + time.strftime("%Y%m%d-%H%M%S") + "-"
+                  + uuid.uuid4().hex[:4])
     out_dir = os.path.join(config.RENDER_DIR, session_id)
     os.makedirs(out_dir, exist_ok=True)
 

@@ -12,47 +12,14 @@ import wave
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dayplayer import composer, config, features, pipeline, synth  # noqa: E402
+from fixtures import isolate_dirs, write_synthetic_day  # noqa: E402
 
 TEST_DATE = "2099-01-01"
 
 
 def synthetic_day(date=TEST_DATE):
-    """3h: flow typing -> flail -> idle -> mixed typing+mouse -> idle."""
-    rng = random.Random(1)
-    config.ensure_dirs()
-    path = config.log_path(date)
-    with open(path, "w") as fh:
-        t = time.time() - 3 * 3600
-        def w(obj):
-            obj["t"] = round(t, 3)
-            fh.write(repr(obj).replace("'", '"') + "\n")
-        def key(c="key"):
-            nonlocal t
-            t += rng.uniform(0.08, 0.35)               # steady flow
-            w({"type": "kd", "c": c}); w({"type": "ku", "c": c})
-        # 1) 40 min deep work: fast steady typing
-        for _ in range(1400):
-            key()
-        # occasional space/enter
-            if rng.random() < 0.15: key("space")
-        # 2) 10 min flail: mod+tab, app switches
-        for _ in range(160):
-            t += rng.uniform(0.2, 1.5)
-            w({"type": "kd", "c": rng.choice(["mod", "tab"])})
-            w({"type": "ku", "c": "mod"})
-            if rng.random() < 0.4:
-                w({"type": "win", "app": rng.choice(["Safari", "Slack", "VS Code"])})
-        # 3) 70 min idle: heartbeats only (no input events)
-        t += 70 * 60
-        # 4) 40 min mixed: typing + heavy mouse
-        for _ in range(600):
-            t += rng.uniform(0.3, 1.2)                 # slower, erratic
-            if rng.random() < 0.6: key()
-            else: w({"type": "mm", "d": round(rng.uniform(20, 120), 1)})
-            if rng.random() < 0.1: w({"type": "ms", "dy": 1, "n": 3})
-        # 5) 20 min idle tail
-        t += 20 * 60
-    return path
+    """Write the shared synthetic day into the (isolated) log dir."""
+    return write_synthetic_day(date, config.LOG_DIR)
 
 
 def wav_stats(path):
@@ -66,6 +33,8 @@ def wav_stats(path):
 
 
 def main():
+    import tempfile
+    isolate_dirs(tempfile.mkdtemp())
     path = synthetic_day()
     print(f"[1] synthetic log written: {path}")
 

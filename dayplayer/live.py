@@ -43,6 +43,7 @@ class LiveEngine:
         self.gain = 0.7
         self.audio_on = False
         self._events: deque[dict] = deque()
+        self._pending = ""                     # half-written log line
         self.started_recorder = False          # did WE spawn the recorder?
         self._stop = threading.Event()
         self._med_key_ema = 40.0
@@ -114,16 +115,25 @@ class LiveEngine:
                     fh = open(self.log_path)
                     fh.seek(0, 2)                  # jump to end
                 line = fh.readline()
-                if line:
-                    try:
-                        self._events.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-                    now = time.time()
-                    while self._events and now - self._events[0]["t"] > 120:
-                        self._events.popleft()
-                else:
+                if not line:
                     time.sleep(0.3)
+                    continue
+                if not line.endswith("\n"):
+                    # a half-written line (the recorder flushes mid-write):
+                    # hold it and finish it on the next pass instead of
+                    # dropping the event and mis-parsing its tail
+                    self._pending += line
+                    time.sleep(0.2)
+                    continue
+                full = self._pending + line
+                self._pending = ""
+                try:
+                    self._events.append(json.loads(full))
+                except json.JSONDecodeError:
+                    continue
+                now = time.time()
+                while self._events and now - self._events[0]["t"] > 120:
+                    self._events.popleft()
             except FileNotFoundError:
                 time.sleep(0.5)
             except Exception:
