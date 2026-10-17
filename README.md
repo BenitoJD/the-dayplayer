@@ -48,6 +48,22 @@ Double-click the tray icon to start/stop recording — **no permission
 prompt on Windows**, it just works. Right-click for the full menu
 (Render, Play A/B, vote, Quit) — same features as the macOS app.
 
+## The dashboard
+
+From the menu bar / tray menu choose **◈ Open Dashboard** — a futuristic
+window (same on both platforms) with everything about your day:
+
+![dashboard](docs/dashboard-preview.png)
+
+- **Today's timeline** — per-minute typing/mouse/idle, colored by pattern,
+  hover any minute for detail
+- **Patterns** — Flow / Flail / Drift / Mire minute counts (patterns,
+  never productivity scores — see docs/PRINCIPLES.md)
+- **Stat cards** — typing events, active minutes, longest flow streak,
+  flail minutes, app switches, mouse distance
+- **Top apps**, busiest hour
+- **Render My Day** with waveform players for the blind A/B test and vote
+
 ## The blind test is the gate
 
 Continue if the real-timing render is distinguishable and you *want to hear
