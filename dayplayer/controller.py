@@ -35,6 +35,32 @@ def open_accessibility_pane_once():
         pass
 
 
+def open_input_monitoring_pane():
+    """Open System Settings straight at Input Monitoring."""
+    if sys.platform != "darwin":
+        return
+    try:
+        subprocess.Popen([
+            "open",
+            "x-apple.systempreferences:com.apple.preference.security"
+            "?Privacy_ListenEvent"])
+    except Exception:
+        pass
+
+
+def open_onboarding_window():
+    """Open the first-run setup window as its own process."""
+    if getattr(sys, "frozen", False):
+        subprocess.Popen([sys.executable, "--onboarding"])
+    else:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        kwargs = {"cwd": root}
+        if sys.platform != "win32":
+            kwargs["start_new_session"] = True
+        subprocess.Popen([sys.executable, "-m", "dayplayer.onboarding"],
+                         **kwargs)
+
+
 def open_live_window():
     """Open the Circadia Live window as a separate process."""
     if getattr(sys, "frozen", False):

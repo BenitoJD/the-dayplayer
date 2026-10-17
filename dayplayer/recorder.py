@@ -132,6 +132,37 @@ def stop_recorder() -> bool:
     return True
 
 
+_IOKIT = None
+
+
+def macos_input_monitoring() -> bool | None:
+    """Input Monitoring (kTCCServiceListenEvent) state on macOS.
+
+    Accessibility (AXIsProcessTrusted) and Input Monitoring are two
+    different grants, and keyboard capture needs Input Monitoring. None
+    means the OS would not say.
+    """
+    global _IOKIT
+    if sys.platform != "darwin":
+        return True
+    try:
+        if _IOKIT is None:
+            import ctypes
+            _IOKIT = ctypes.cdll.LoadLibrary(
+                "/System/Library/Frameworks/IOKit.framework/IOKit")
+            _IOKIT.IOHIDCheckAccess.restype = ctypes.c_int
+            _IOKIT.IOHIDCheckAccess.argtypes = [ctypes.c_int]
+        code = _IOKIT.IOHIDCheckAccess(1)          # ListenEvent
+        return {0: True, 1: False}.get(code)
+    except Exception:
+        return None
+
+
+def permission_report() -> dict:
+    return {"accessibility": macos_input_trusted(),
+            "input_monitoring": macos_input_monitoring()}
+
+
 class JsonlWriter:
     """Append-only JSONL writer with midnight rollover."""
 

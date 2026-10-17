@@ -11,7 +11,7 @@ fi
 rm -rf build dist
 .venv/bin/pyinstaller --noconfirm --name Circadia --windowed \
   --icon assets/icon.icns --add-data "assets:assets" \
-  --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow \
+  --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow --hidden-import dayplayer.onboarding \
   run_dayplayer.py
 codesign --force --deep -s - dist/Circadia.app
 echo ""

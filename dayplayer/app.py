@@ -15,8 +15,9 @@ import sys
 
 import rumps
 
-from . import config
-from .controller import Controller, open_dashboard_window, open_live_window
+from . import autostart, config, maintenance
+from .controller import (Controller, open_dashboard_window,
+                         open_live_window, open_onboarding_window)
 
 REFRESH_SECS = 2
 
@@ -36,6 +37,9 @@ class DayplayerApp(rumps.App):
 
     # ------------------------------------------------------------- menu
     def _build_menu(self):
+        self._login_item = rumps.MenuItem("Start at login and record",
+                                          callback=self.on_toggle_login)
+        self._login_item.state = 1 if autostart.is_enabled() else 0
         self._status = rumps.MenuItem("○ Not recording")
         self._toggle = rumps.MenuItem("Start Recording",
                                       callback=self.on_toggle)
@@ -65,11 +69,16 @@ class DayplayerApp(rumps.App):
                            open_dashboard_window()),
             rumps.MenuItem("◉  Go Live, hear your state", callback=lambda mi:
                            open_live_window()), None,
+            self._login_item, None,
             self._render, None,
             self._play_a, self._play_b, self._stop_play, None,
             self._vote_a, self._vote_b, self._reveal_item, None,
+            rumps.MenuItem("Welcome & Setup…", callback=lambda mi:
+                           open_onboarding_window()),
             rumps.MenuItem("Open Logs Folder", callback=self.on_logs),
-            rumps.MenuItem("About Dayplayer", callback=self.on_about),
+            rumps.MenuItem("Delete All My Data…",
+                           callback=self.on_delete_data),
+            rumps.MenuItem("About Circadia", callback=self.on_about),
             rumps.MenuItem("Quit", callback=self.on_quit),
         ]
         self._set_enabled(False)
@@ -139,6 +148,26 @@ class DayplayerApp(rumps.App):
         self._notify("The blind test says…", self._reveal)
         self._refresh()
 
+    def on_toggle_login(self, item):
+        ok = autostart.disable() if item.state else autostart.enable()
+        item.state = 1 if autostart.is_enabled() else 0
+        if not ok:
+            self._notify("Could not change login setting",
+                         "Circadia could not write the login item.")
+
+    def on_delete_data(self, _):
+        summary = maintenance.summary_text()
+        if not rumps.alert(
+                title="Delete all Circadia data?",
+                message=f"{summary}\n\nThis erases every recording, render "
+                        f"and tag. It cannot be undone.",
+                ok="Delete", cancel="Cancel"):
+            return
+        result = maintenance.delete_all_data()
+        self._notify("Data deleted",
+                     f"Freed {result['freed_bytes'] / 1024:.0f} KB. "
+                     f"Nothing is left in ~/.dayplayer but your settings.")
+
     def on_logs(self, _):
         subprocess.Popen(["open", config.LOG_DIR])
 
@@ -159,6 +188,10 @@ class DayplayerApp(rumps.App):
 
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
+    if "--onboarding" in argv:
+        from .onboarding import main as onboard_main
+        onboard_main()
+        return
     if "--record" in argv:                       # detached recorder process
         from .recorder import main as record_main
         record_main()
@@ -172,6 +205,11 @@ def main(argv=None):
         live_main()
         return
     config.ensure_dirs()
+    if "--autostart" in argv:
+        from .recorder import spawn_recorder
+        spawn_recorder()                     # a reboot must not record nothing
+    if maintenance.needs_onboarding():
+        open_onboarding_window()             # first run: ask, do not assume
     if sys.platform == "darwin":
         DayplayerApp().run()
     else:

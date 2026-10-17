@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
       - name: Build Dayplayer.exe
-        run: pyinstaller --noconfirm --name Circadia --onefile --windowed --icon assets/icon.ico --add-data "assets;assets" --hidden-import pystray._win32 --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow run_dayplayer.py
+        run: pyinstaller --noconfirm --name Circadia --onefile --windowed --icon assets/icon.ico --add-data "assets;assets" --hidden-import pystray._win32 --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow --hidden-import dayplayer.onboarding run_dayplayer.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

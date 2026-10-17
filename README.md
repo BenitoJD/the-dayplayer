@@ -90,6 +90,23 @@ with ‹ ›, tag the day in a whisper at the bottom.
 
 ![dashboard](docs/dashboard-preview.png)
 
+## First run, and looking after your data
+
+The first time you open it, Circadia shows one screen: what it records
+(timings), what it never records (letters, titles, clipboard, screen), and
+it asks for the macOS permissions with the reason attached. Nothing is
+assumed on your behalf.
+
+From the menu bar or tray you can also:
+
+- **Start at login and record**: a reboot never silently records nothing.
+  On macOS this writes a LaunchAgent, on Windows a registry Run entry, and
+  both are removed the moment you untick it.
+- **Delete All My Data...**: erases every recording, render and tag, after
+  telling you exactly how much is there. Settings survive, your data does
+  not.
+- **Welcome & Setup...**: see the first-run screen again.
+
 ## The blind test is the gate
 
 Continue if the real-timing render is distinguishable and you *want to hear

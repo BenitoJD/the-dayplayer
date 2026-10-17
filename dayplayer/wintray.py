@@ -17,8 +17,9 @@ import time
 import pystray
 from PIL import Image, ImageDraw
 
-from . import config
-from .controller import Controller, open_dashboard_window, open_live_window
+from . import autostart, config, maintenance
+from .controller import (Controller, open_dashboard_window,
+                         open_live_window, open_onboarding_window)
 
 ABOUT = ("Circadia: your day, played back.\n\n"
          "Records timings only, never letters, never content.\n"
@@ -96,6 +97,9 @@ class WinTrayApp:
                              lambda: open_dashboard_window()),
             pystray.MenuItem("◉  Go Live, hear your state",
                              lambda: open_live_window()),
+            pystray.MenuItem("Start at login and record",
+                             self.on_toggle_login,
+                             checked=lambda item: autostart.is_enabled()),
             pystray.MenuItem(lambda item: "Rendering… (~30s)"
                              if self._rendering else "▶  Render My Day",
                              self.on_render),
@@ -107,8 +111,11 @@ class WinTrayApp:
             pystray.MenuItem("B is me", self._vote_b),
             pystray.MenuItem(lambda item: self._reveal, None, enabled=False),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Welcome & Setup…",
+                             lambda: open_onboarding_window()),
             pystray.MenuItem("Open Logs Folder", self.on_logs),
-            pystray.MenuItem("About Dayplayer", self.on_about),
+            pystray.MenuItem("Delete All My Data…", self.on_delete_data),
+            pystray.MenuItem("About Circadia", self.on_about),
             pystray.MenuItem("Quit", self.on_quit),
         )
 
@@ -181,6 +188,27 @@ class WinTrayApp:
             self._reveal = self.ctl.vote(choice)
             self._notify("The blind test says…", self._reveal)
         self.icon.update_menu()
+
+    def on_toggle_login(self, icon=None, item=None):
+        if autostart.is_enabled():
+            autostart.disable()
+        else:
+            autostart.enable()
+        self.icon.update_menu()
+
+    def on_delete_data(self, icon=None, item=None):
+        summary = maintenance.summary_text()
+        MB_YESNO, MB_ICONWARNING = 0x4, 0x30
+        answer = ctypes.windll.user32.MessageBoxW(
+            0,
+            f"{summary}\n\nThis erases every recording, render and tag. "
+            f"It cannot be undone.\n\nDelete everything?",
+            "Circadia", MB_YESNO | MB_ICONWARNING)
+        if answer == 6:                      # IDYES
+            result = maintenance.delete_all_data()
+            self._notify("Data deleted",
+                         f"Freed {result['freed_bytes'] / 1024:.0f} KB.")
+            self.icon.update_menu()
 
     def on_logs(self, icon=None, item=None):
         os.startfile(config.LOG_DIR)      # type: ignore[attr-defined]

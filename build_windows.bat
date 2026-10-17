@@ -6,7 +6,7 @@ python -m venv .venv || goto :err
 .venv\Scripts\pyinstaller --noconfirm --name Circadia --onefile --windowed ^
     --icon assets\icon.ico --add-data "assets;assets" ^
     --hidden-import pystray._win32 ^
-    --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow run_dayplayer.py
+    --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow --hidden-import dayplayer.onboarding run_dayplayer.py
 if errorlevel 1 goto :err
 echo.
 echo Done. Your app: dist\Circadia.exe
