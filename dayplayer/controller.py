@@ -17,6 +17,24 @@ from . import config, features, pipeline
 from .playback import Player
 
 
+_ACCESSIBILITY_PROMPTED = False
+
+
+def open_accessibility_pane_once():
+    """Open the exact System Settings pane, once per app run."""
+    global _ACCESSIBILITY_PROMPTED
+    if _ACCESSIBILITY_PROMPTED or sys.platform != "darwin":
+        return
+    _ACCESSIBILITY_PROMPTED = True
+    try:
+        subprocess.Popen([
+            "open",
+            "x-apple.systempreferences:com.apple.preference.security"
+            "?Privacy_Accessibility"])
+    except Exception:
+        pass
+
+
 def open_live_window():
     """Open the Circadia Live window as a separate process."""
     if getattr(sys, "frozen", False):
@@ -67,12 +85,15 @@ class Controller:
             return False
         from .recorder import macos_input_trusted
         if not macos_input_trusted():
-            # macOS drops every event without accessibility trust —
-            # say so instead of silently recording nothing.
+            # macOS drops keyboard events without accessibility trust —
+            # say so, and show the exact pane they need (once) instead of
+            # silently recording only mouse drift.
             self.notify(
-                "macOS is blocking input",
-                "Grant access in System Settings → Privacy & Security → "
-                "Accessibility (add Circadia), then restart the app.")
+                "macOS is blocking your keyboard",
+                "Turn on Circadia in System Settings → Privacy & Security → "
+                "Accessibility, then restart the app. Mouse activity is "
+                "being recorded meanwhile.")
+            open_accessibility_pane_once()
         return True
 
     @property
