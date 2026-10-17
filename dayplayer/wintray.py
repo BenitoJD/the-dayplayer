@@ -27,15 +27,43 @@ ABOUT = ("The Dayplayer\n\n"
          "docs/TRUST.md holds the full promise.")
 
 
+def _base_icon() -> Image.Image | None:
+    """The real app icon from assets/, if available (bundled in exe)."""
+    path = os.path.join(os.path.dirname(__file__), "..", "assets",
+                        "icon.png")
+    try:
+        return Image.open(path).convert("RGBA").resize((64, 64),
+                                                       Image.LANCZOS)
+    except Exception:
+        return None
+
+
+_BASE = _base_icon()
+
+
 def _icon_image(recording: bool) -> Image.Image:
-    size = 64
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    if _BASE is None:                       # fallback: simple dot
+        size = 64
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        d = ImageDraw.Draw(img)
+        d.ellipse([2, 2, size - 2, size - 2], fill=(21, 25, 35, 255))
+        r = size // 4
+        color = (240, 180, 41, 255) if recording else (110, 120, 145, 255)
+        d.ellipse([size // 2 - r, size // 2 - r, size // 2 + r, size // 2 + r],
+                  fill=color)
+        return img
+    if not recording:                       # dimmed = idle
+        dim = _BASE.copy()
+        a = dim.getchannel("A").point(lambda v: int(v * 0.55))
+        dim.putalpha(a)
+        return dim
+    img = _BASE.copy()                      # full color + amber badge
     d = ImageDraw.Draw(img)
-    d.ellipse([2, 2, size - 2, size - 2], fill=(21, 25, 35, 255))
-    r = size // 4
-    color = (240, 180, 41, 255) if recording else (110, 120, 145, 255)
-    d.ellipse([size // 2 - r, size // 2 - r, size // 2 + r, size // 2 + r],
-              fill=color)
+    r = 11
+    cx, cy = 64 - r - 3, 64 - r - 3
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(7, 10, 18, 255))
+    d.ellipse([cx - r + 2, cy - r + 2, cx + r - 2, cy + r - 2],
+              fill=(240, 180, 41, 255))
     return img
 
 
