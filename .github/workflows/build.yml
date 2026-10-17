@@ -1,0 +1,25 @@
+name: Build Windows app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+      - name: Build Dayplayer.exe
+        run: pyinstaller --noconfirm --name Dayplayer --onefile --windowed --icon assets/icon.ico --hidden-import pystray._win32 run_dayplayer.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dayplayer-Windows
+          path: dist/Dayplayer.exe
+          if-no-files-found: error

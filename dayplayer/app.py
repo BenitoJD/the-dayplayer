@@ -1,35 +1,38 @@
-"""The Dayplayer — native macOS menu bar app.
+"""The Dayplayer — native apps for macOS and Windows.
 
-  ● / ○ in the menu bar shows recording state.
-  Click the menu: start/stop recording, render the day, play A/B
-  blind, vote, reveal. No browser, no server.
+macOS   → menu bar app (rumps): ● / ○ in the menu bar
+Windows → system tray app (pystray): see dayplayer/wintray.py
 
-Run:  python3 -m dayplayer.app     (or double-click Dayplayer.app)
+Both share dayplayer.controller — the recorder, render pipeline,
+blind A/B playback and votes.
+
+Run:  python3 -m dayplayer.app   (or double-click the platform app)
 """
 from __future__ import annotations
 
-import os
 import subprocess
-import threading
-import time
+import sys
 
 import rumps
 
-from . import config, features, pipeline
-from .recorder import Recorder
+from . import config
+from .controller import Controller
 
-REFRESH_SECS = 20
+REFRESH_SECS = 2
 
 
 class DayplayerApp(rumps.App):
     def __init__(self):
         super().__init__(name="Dayplayer", title="○", quit_button=None)
-        self.recorder = Recorder()
-        self.session = None          # blind render session id
-        self.result = None           # last vote result text
-        self.playing = None          # afplay subprocess
+        self.ctl = Controller(notify=self._notify)
+        self._pending = None            # render result, consumed on main loop
+        self._rendering = False
+        self._reveal = "— vote first —"
         self._build_menu()
         self._refresh()
+
+    def _notify(self, title: str, message: str):
+        rumps.notification("Dayplayer", title, message)
 
     # ------------------------------------------------------------- menu
     def _build_menu(self):
@@ -39,141 +42,98 @@ class DayplayerApp(rumps.App):
         self._render = rumps.MenuItem("▶  Render My Day",
                                       callback=self.on_render)
         self._play_a = rumps.MenuItem("Play A", callback=lambda mi:
-                                      self.on_play(mi, "a"))
+                                      self.ctl.play("a"))
         self._play_b = rumps.MenuItem("Play B", callback=lambda mi:
-                                      self.on_play(mi, "b"))
+                                      self.ctl.play("b"))
         self._stop_play = rumps.MenuItem("Stop Playback",
-                                         callback=self.on_stop_play)
+                                         callback=lambda mi:
+                                         self.ctl.stop_playback())
         self._vote_a = rumps.MenuItem("A is me", callback=lambda mi:
-                                      self.on_vote(mi, "a"))
+                                      self.on_vote("a"))
         self._vote_b = rumps.MenuItem("B is me", callback=lambda mi:
-                                      self.on_vote(mi, "b"))
-        self._reveal = rumps.MenuItem("— vote first —")
+                                      self.on_vote("b"))
+        self._base_callbacks = [
+            (self._play_a, self._play_a.callback),
+            (self._play_b, self._play_b.callback),
+            (self._vote_a, self._vote_a.callback),
+            (self._vote_b, self._vote_b.callback),
+        ]
+        self._reveal_item = rumps.MenuItem(self._reveal)
         self.menu = [
             self._status, self._toggle, None,
             self._render, None,
             self._play_a, self._play_b, self._stop_play, None,
-            self._vote_a, self._vote_b, self._reveal, None,
+            self._vote_a, self._vote_b, self._reveal_item, None,
             rumps.MenuItem("Open Logs Folder", callback=self.on_logs),
             rumps.MenuItem("About Dayplayer", callback=self.on_about),
             rumps.MenuItem("Quit", callback=self.on_quit),
         ]
-        self._set_render_enabled(False)
+        self._set_enabled(False)
 
-    def _set_render_enabled(self, on: bool):
-        for item in (self._play_a, self._play_b, self._vote_a, self._vote_b):
-            item.set_callback(item.callback if on else None)
+    def _set_enabled(self, on: bool):
+        for item, cb in self._base_callbacks:
+            item.set_callback(cb if on else None)
 
-    # ------------------------------------------------------------ status
-    def _refresh(self, *a):
+    # ------------------------------------------------------------ refresh
+    def _refresh(self):
         try:
-            events = [e for e in features.load_events()
-                      if e.get("type") in features.INPUT_TYPES
-                      or e.get("type") == "win"]
-            live = self.recorder.running
-            if not live and events:
-                live = time.time() - events[-1]["t"] < 90
-            n = len(events)
-            self.title = "●" if live else "○"
-            self._status.title = (f"● Recording — {n:,} events today"
-                                  if live else f"○ Not recording ({n:,} today)")
-            self._toggle.title = "Stop Recording" if self.recorder.running \
-                else "Start Recording"
+            text = self.ctl.status_text()
+            self.title = "●" if text.startswith("●") else "○"
+            self._status.title = text
+            self._toggle.title = self.ctl.toggle_title()
+            self._reveal_item.title = self._reveal
         except Exception:
             pass
 
+    @rumps.timer(REFRESH_SECS)
+    def _tick(self, _sender):
+        self._refresh()
+        if self._pending:                       # consume on the main thread
+            result, self._pending = self._pending, None
+            self._render_done(result)
+
     # ----------------------------------------------------------- actions
     def on_toggle(self, _):
-        if self.recorder.running:
-            self.recorder.stop()
-            self._refresh()
-            rumps.notification("Dayplayer", "Recording stopped",
-                               "Your log is saved in ~/.dayplayer")
+        if self.ctl.recording:
+            self.ctl.stop_recording()
         else:
-            try:
-                self.recorder.start()
-                self._refresh()
-                if self.recorder.count == 0 and self.recorder.running:
-                    rumps.notification(
-                        "Dayplayer", "Recording started",
-                        "If events stay at 0: allow Dayplayer under "
-                        "Input Monitoring (System Settings → Privacy & "
-                        "Security), then restart it.")
-            except Exception as e:
-                rumps.notification("Dayplayer", "Could not start", str(e))
+            if self.ctl.start_recording():
+                self._notify("Recording started",
+                             "If events stay at 0: allow Dayplayer under "
+                             "Input Monitoring (System Settings → Privacy "
+                             "& Security), then restart it.")
+        self._refresh()
 
     def on_render(self, _):
-        if not self.recorder.running:
-            today = features.load_events()
-            if not today:
-                rumps.notification(
-                    "Dayplayer", "Nothing to render yet",
-                    "Start recording and work for a while first.")
-                return
-        self._render.set_callback(None)
+        if not self.ctl.recording and not self.ctl.has_any_data():
+            self._notify("Nothing to render yet",
+                         "Start recording and work for a while first.")
+            return
+        self._rendering = True
         self._render.title = "Rendering… (~30s)"
-        threading.Thread(target=self._render_worker, daemon=True).start()
+        self._render.set_callback(None)
+        self.ctl.render(lambda r: setattr(self, "_pending", r))
 
-    def _render_worker(self):
-        try:
-            result = pipeline.render_day()
-        except Exception as e:
-            rumps.notification("Dayplayer", "Render failed", str(e))
-            return
-        finally:
-            self._render.title = "▶  Render My Day"
-            self._render.set_callback(self.on_render)
+    def _render_done(self, result):
+        self._rendering = False
+        self._render.title = "▶  Render My Day"
+        self._render.set_callback(self.on_render)
         if result.get("error"):
-            rumps.notification("Dayplayer", "Nothing to render",
-                               result.get("message", ""))
+            if result.get("error") != "no_data":
+                self._notify("Render failed", result.get("message", ""))
+            else:
+                self._notify("Nothing to render", result.get("message", ""))
             return
-        self.session = result["id"]
-        self.result = None
-        self._reveal.title = "— vote first —"
-        self._set_render_enabled(True)
-        mins = result.get("stats", {}).get("n_minutes", "?")
-        rumps.notification(
-            "Dayplayer", "Your day is ready",
-            f"{mins} minutes compressed to ~3:00. "
-            "Listen to A and B, then vote which is you.")
+        msg = self.ctl.accept_render(result)
+        self._reveal = "— vote first —"
+        self._set_enabled(True)
+        self._notify("Your day is ready", msg)
 
-    def on_play(self, _, which: str):
-        self.on_stop_play(None)
-        sid = self.session
-        if not sid:
-            return
-        # blind copies: a.wav/b.wav never reveal their source on disk
-        meta = pipeline.load_session(sid)
-        real_is_a = meta["real_label"] == "a"
-        src = "real.wav" if (which == "a") == real_is_a else "shuffled.wav"
-        blind_path = os.path.join(config.RENDER_DIR, sid,
-                                  f"blind_{which}.wav")
-        if not os.path.exists(blind_path):
-            import shutil
-            shutil.copyfile(os.path.join(config.RENDER_DIR, sid, src),
-                            blind_path)
-        self.playing = subprocess.Popen(["afplay", blind_path])
-
-    def on_stop_play(self, _):
-        if self.playing:
-            self.playing.terminate()
-            self.playing = None
-
-    def on_vote(self, _, choice: str):
-        if not self.session:
-            return
-        self.on_stop_play(None)
-        try:
-            meta = pipeline.load_session(self.session)
-            correct = choice == meta["real_label"]
-            real = meta["real_label"].upper()
-            self.result = (
-                f"{'✔ Correct' if correct else '✘ Wrong'} — "
-                f"your real day was {real}")
-        except Exception as e:
-            self.result = f"(vote failed: {e})"
-        self._reveal.title = self.result
-        rumps.notification("Dayplayer", "The blind test says…", self.result)
+    def on_vote(self, choice: str):
+        self.ctl.stop_playback()
+        self._reveal = self.ctl.vote(choice)
+        self._notify("The blind test says…", self._reveal)
+        self._refresh()
 
     def on_logs(self, _):
         subprocess.Popen(["open", config.LOG_DIR])
@@ -188,14 +148,18 @@ class DayplayerApp(rumps.App):
             dimensions=(320, 200)).run()
 
     def on_quit(self, _):
-        self.on_stop_play(None)
-        self.recorder.stop()
+        self.ctl.stop_playback()
+        self.ctl.stop_recording()
         rumps.quit_application()
 
 
 def main():
     config.ensure_dirs()
-    DayplayerApp().run()
+    if sys.platform == "darwin":
+        DayplayerApp().run()
+    else:
+        from .wintray import WinTrayApp
+        WinTrayApp().run()
 
 
 if __name__ == "__main__":

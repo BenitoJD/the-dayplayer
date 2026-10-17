@@ -32,6 +32,22 @@ appear in your menu bar.
 
 If you moved the repo or changed code: run `./make_app.sh` to rebuild the app.
 
+## The app (Windows)
+
+Option A — **download the ready-made exe**: go to
+[Actions](https://github.com/BenitoJD/the-dayplayer/actions) → latest
+"Build Windows app" run → scroll to **Artifacts** → download
+**Dayplayer-Windows** → unzip → double-click `Dayplayer.exe`.
+
+Option B — build it yourself on any Windows PC with Python 3.11+:
+double-click **`build_windows.bat`** → your app appears at
+`dist\Dayplayer.exe`.
+
+Either way: `Dayplayer.exe` lives in your **system tray** (near the clock).
+Double-click the tray icon to start/stop recording — **no permission
+prompt on Windows**, it just works. Right-click for the full menu
+(Render, Play A/B, vote, Quit) — same features as the macOS app.
+
 ## The blind test is the gate
 
 Continue if the real-timing render is distinguishable and you *want to hear
@@ -42,16 +58,22 @@ See docs/PRINCIPLES.md.
 ## How it works
 
 ```
-recorder.py   pynput hooks → ~/.dayplayer/logs/YYYY-MM-DD.jsonl
-              (coarse classes only: key/space/tab/mod… + timestamps)
-features.py   per-minute vectors: key rate, rhythm CV, burstiness,
-              flail rate, mouse distance, idle
-composer.py   features → score (JSON): ticks, kicks, blips, drones…
-synth.py      score → WAV (pure numpy synth, no DAW, no internet)
-app.py        native macOS menu bar app (rumps): record, render,
-              play A/B, blind vote — no browser, no server
-server.py     optional local dashboard (kept for the future share player)
+recorder.py    pynput hooks → ~/.dayplayer/logs/YYYY-MM-DD.jsonl
+               (coarse classes only: key/space/tab/mod… + timestamps;
+               macOS + Windows + Linux in one codebase)
+features.py    per-minute vectors: key rate, rhythm CV, burstiness,
+               flail rate, mouse distance, idle
+composer.py    features → score (JSON): ticks, kicks, blips, drones…
+synth.py       score → WAV (pure numpy synth, no DAW, no internet)
+controller.py  shared brain: recorder + render + blind session + votes
+app.py         macOS menu bar app (rumps) — ● / ○ in the menu bar
+wintray.py     Windows system tray app (pystray) — same features
+playback.py    afplay (mac) / winsound (win) / paplay (linux)
+server.py      optional local dashboard (kept for the future share player)
 ```
+
+Packaging: `make_app.sh` (mac dev bundle), `build_windows.bat` (exe),
+and GitHub Actions builds `Dayplayer.exe` on every push.
 
 The **score is JSON** — the same score can later be played in a browser
 (Tone.js) or wrapped in a native Windows shell without touching the recorder.
