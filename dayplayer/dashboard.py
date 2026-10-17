@@ -1,10 +1,8 @@
-"""The Dayplayer dashboard — a futuristic native window (PySide6).
+"""Circadia dashboard — futuristic native window (PySide6), both platforms.
 
-Same app on macOS and Windows. The menu bar / tray icon stays as the
-ambient recorder; this window is where you *look* and *listen*:
-
-  today's timeline · pattern breakdown (Flow / Flail / Drift / Mire)
-  top apps · focus stats · Render My Day · blind A/B listen + vote
+Tabs:
+  TODAY — timeline, patterns, stats, tags, render + blind A/B vote
+  WEEK  — the audible diary: day-by-day grid, week render, tag correlations
 
 Run:  python3 -m dayplayer.dashboard [--date YYYY-MM-DD] [--grab out.png]
 """
@@ -15,14 +13,16 @@ import sys
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal, QRectF
-from PySide6.QtGui import (QColor, QFont, QFontDatabase, QIcon, QPainter,
-                           QPainterPath, QPixmap)
+from PySide6.QtGui import (QColor, QFont, QIcon, QPainter,
+                           QPainterPath, QLinearGradient)
 from PySide6.QtWidgets import (QApplication, QFrame, QGridLayout,
-                               QHBoxLayout, QLabel, QMainWindow, QPushButton,
-                               QSizePolicy, QToolTip, QVBoxLayout, QWidget)
+                               QHBoxLayout, QLabel, QLineEdit,
+                               QMainWindow, QPushButton, QScrollArea,
+                               QSizePolicy, QTabWidget, QToolTip,
+                               QVBoxLayout, QWidget)
 
-from . import config, patterns, pipeline
-from .controller import Controller
+from . import config, patterns, pipeline, tags
+from .controller import Controller, open_dashboard_window, open_live_window
 
 # ------------------------------------------------------------------ theme
 BG = "#070a12"
@@ -35,18 +35,26 @@ AMBER = "#f0b429"
 CYAN = "#4fd8eb"
 RED = "#ef6c57"
 BLUE = "#5b8def"
+GREEN = "#3ecf8e"
 
 QSS = f"""
 QMainWindow, QWidget {{ background: {BG}; color: {INK};
-  font-family: 'SF Mono', 'Menlo', 'Cascadia Code', 'Consolas', monospace; }}
+  font-family: 'Menlo', 'Cascadia Code', 'Consolas', monospace; }}
+QTabWidget::pane {{ border: 1px solid {BORDER}; border-radius: 12px;
+  background: {PANEL}; }}
+QTabBar::tab {{ background: {PANEL2}; color: {DIM}; border: 1px solid
+  {BORDER}; padding: 7px 22px; margin-right: 4px;
+  border-top-left-radius: 9px; border-top-right-radius: 9px;
+  font-size: 11px; letter-spacing: 2px; }}
+QTabBar::tab:selected {{ color: {CYAN}; border-bottom: 2px solid {CYAN}; }}
 QFrame#card {{ background: {PANEL}; border: 1px solid {BORDER};
   border-radius: 12px; }}
 QFrame#subtle {{ background: {PANEL2}; border: 1px solid {BORDER};
   border-radius: 10px; }}
-QLabel#h1 {{ font-size: 21px; font-weight: 700; letter-spacing: 1px; }}
+QLabel#h1 {{ font-size: 21px; font-weight: 700; letter-spacing: 3px; }}
 QLabel#dim  {{ color: {DIM}; font-size: 11px; }}
-QLabel#big  {{ font-size: 22px; font-weight: 700; color: {CYAN}; }}
-QLabel#bigA {{ font-size: 22px; font-weight: 700; color: {AMBER}; }}
+QLabel#big  {{ font-size: 21px; font-weight: 700; color: {CYAN}; }}
+QLabel#bigA {{ font-size: 21px; font-weight: 700; color: {AMBER}; }}
 QPushButton {{ background: {PANEL2}; color: {INK}; border: 1px solid {BORDER};
   border-radius: 9px; padding: 8px 14px; font-size: 12px; }}
 QPushButton:hover {{ border-color: {CYAN}; }}
@@ -54,8 +62,14 @@ QPushButton#primary {{ background: {AMBER}; color: #1a1405; font-weight: 700;
   border: none; padding: 11px 20px; font-size: 13px; }}
 QPushButton#primary:hover {{ background: #ffc94a; }}
 QPushButton#primary:disabled {{ background: #4a4020; color: #8a7a45; }}
+QPushButton#live {{ background: rgba(62,207,142,.12); color: {GREEN};
+  border: 1px solid #2a6b52; font-weight: 700; }}
+QPushButton#live:hover {{ background: rgba(62,207,142,.22); }}
 QPushButton#vote {{ border: 1px solid {CYAN}; color: {CYAN}; }}
 QPushButton#vote:hover {{ background: rgba(79,216,235,.12); }}
+QLineEdit {{ background: {PANEL2}; border: 1px solid {BORDER};
+  border-radius: 8px; padding: 6px 10px; color: {INK}; font-size: 12px; }}
+QScrollArea {{ border: none; background: transparent; }}
 """
 
 
@@ -74,17 +88,12 @@ class StatCard(QFrame):
 
 
 class Timeline(QFrame):
-    """Per-minute bars: typing (amber), mouse (blue), idle line (dark);
-    pattern strip underneath; hour ticks; hover for minute detail."""
-
     MARGIN_L, MARGIN_R, MARGIN_B = 6, 6, 26
 
     def __init__(self):
         super().__init__(objectName="card")
-        self.setMinimumHeight(150)
-        self.data = []
-        self.strip = []
-        self.start_ts = 0
+        self.setMinimumHeight(140)
+        self.data, self.strip, self.start_ts = [], [], time.time()
         self.setMouseTracking(True)
 
     def set_day(self, summary: dict):
@@ -111,8 +120,7 @@ class Timeline(QFrame):
         QToolTip.showText(e.globalPosition().toPoint(),
                           f"{clock}\n{m['key_rate']} keys · "
                           f"{int(m['mouse_dist'])}px mouse\n"
-                          f"{m['switches']:.0f} switches · {pat}",
-                          self)
+                          f"{m['switches']:.0f} switches · {pat}", self)
 
     def paintEvent(self, _):
         p = QPainter(self)
@@ -127,19 +135,18 @@ class Timeline(QFrame):
         max_key = max((m["key_rate"] for m in self.data), default=1) or 1
         max_mouse = max((m["mouse_dist"] for m in self.data), default=1) or 1
         bw = max(w / len(self.data) - 0.6, 0.8)
-
         for i, m in enumerate(self.data):
             x = self.MARGIN_L + i * w / len(self.data)
             pat = m.get("pattern", patterns.MIRE)
             if pat == patterns.MIRE:
-                p.fillRect(QRectF(x, h - 4, bw, 4), QColor(patterns.PATTERN_META[pat]["color"]))
+                p.fillRect(QRectF(x, h - 4, bw, 4),
+                           QColor(patterns.PATTERN_META[pat]["color"]))
                 continue
             hk = m["key_rate"] / max_key * (h - 14)
             hm = m["mouse_dist"] / max_mouse * (h * 0.35)
             p.fillRect(QRectF(x, h - 4 - hm, bw, hm), QColor(35, 52, 95))
             p.fillRect(QRectF(x, h - 4 - hk, bw, max(hk, 2)),
                        QColor(patterns.PATTERN_META[pat]["color"]))
-        # hour ticks
         p.setPen(QColor(DIM))
         f = QFont(p.font())
         f.setPointSize(8)
@@ -152,9 +159,32 @@ class Timeline(QFrame):
             p.drawText(QRectF(x - 30, h + 6, 60, 16), Qt.AlignCenter, t)
 
 
-class Waveform(QWidget):
-    """Peak silhouette of a WAV file, glowing cyan."""
+class MiniTimeline(QWidget):
+    """Tiny strip version for week cards."""
 
+    def __init__(self):
+        super().__init__()
+        self.setMinimumHeight(26)
+        self.strip = []
+
+    def set_strip(self, strip: list):
+        self.strip = strip or []
+        self.update()
+
+    def paintEvent(self, _):
+        if not self.strip:
+            return
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        n = len(self.strip)
+        bw = max(self.width() / n - 0.5, 1.0)
+        for i, pat in enumerate(self.strip):
+            c = patterns.PATTERN_META[pat]["color"]
+            h = 6 if pat == patterns.MIRE else 14 + 10 * (i % 3) / 2
+            p.fillRect(QRectF(i * bw, self.height() - h, bw, h), QColor(c))
+
+
+class Waveform(QWidget):
     def __init__(self):
         super().__init__()
         self.setMinimumHeight(44)
@@ -166,7 +196,7 @@ class Waveform(QWidget):
         import numpy as np
         try:
             with wav.open(path) as w:
-                n = min(w.getnframes(), 44100 * 60)
+                n = min(w.getnframes(), 44100 * 120)
                 x = np.frombuffer(w.readframes(n), dtype=np.int16)
                 x = x[::2].astype(float) / 32768.0
             step = max(len(x) // 240, 1)
@@ -184,22 +214,17 @@ class Waveform(QWidget):
             p.setPen(QColor(DIM))
             p.drawText(self.rect(), Qt.AlignCenter, "render to see waveform")
             return
-        h = self.height()
-        w = self.width()
-        n = len(self.peaks)
+        h, w, n = self.height(), self.width(), len(self.peaks)
         path = QPainterPath()
         for i, v in enumerate(self.peaks):
             x = i / n * w
-            y = h / 2 - v * h * 0.46
             path.moveTo(x, h / 2)
-            path.lineTo(x, y)
+            path.lineTo(x, h / 2 - v * h * 0.46)
         p.setPen(QColor(CYAN))
         p.drawPath(path)
 
 
 class PlayerCard(QFrame):
-    """A/B blind player: waveform + play + vote."""
-
     voted = Signal(str)
 
     def __init__(self, label: str, ctl: Controller):
@@ -236,23 +261,109 @@ class PlayerCard(QFrame):
         self.wave.load(blind_path)
 
 
+class TagRow(QFrame):
+    """Chips + add box for outcome tags."""
+
+    def __init__(self, date: str):
+        super().__init__(objectName="card")
+        self.date = date
+        v = QVBoxLayout(self)
+        v.setContentsMargins(14, 10, 14, 10)
+        head = QHBoxLayout()
+        lab = QLabel("HOW DID TODAY GO?  (tags)")
+        lab.setObjectName("dim")
+        v.addWidget(lab)
+        self.chips = QHBoxLayout()
+        self.chips.setSpacing(6)
+        self.input = QLineEdit()
+        self.input.setPlaceholderText("shipped · meeting day · exhausted…")
+        self.input.returnPressed.connect(self._add)
+        add = QPushButton("add")
+        add.clicked.connect(self._add)
+        row = QHBoxLayout()
+        row.addWidget(self.input, 1)
+        row.addWidget(add)
+        v.addLayout(row)
+        v.addLayout(self.chips)
+        self.refresh()
+
+    def _add(self):
+        t = self.input.text().strip()
+        if t:
+            tags.set_tags(self.date, tags.get_tags(self.date) + [t])
+            self.input.clear()
+            self.refresh()
+
+    def _remove(self, t: str):
+        tags.set_tags(self.date,
+                      [x for x in tags.get_tags(self.date) if x != t])
+        self.refresh()
+
+    def refresh(self):
+        while self.chips.count():
+            item = self.chips.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for t in tags.get_tags(self.date):
+            chip = QPushButton(f"✕ {t}")
+            chip.setToolTip("remove")
+            chip.clicked.connect(lambda _=False, tt=t: self._remove(tt))
+            self.chips.addWidget(chip)
+        self.chips.addStretch(1)
+
+
+class WeekDayCard(QFrame):
+    def __init__(self):
+        super().__init__(objectName="card")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(4)
+        self.day = QLabel("")
+        self.day.setObjectName("dim")
+        row = QHBoxLayout()
+        self.flow = QLabel("—")
+        self.flow.setStyleSheet(f"font-size:17px;font-weight:700;"
+                                f"color:{AMBER};")
+        self.meta = QLabel("")
+        self.meta.setObjectName("dim")
+        row.addWidget(self.flow)
+        row.addStretch(1)
+        row.addWidget(self.meta, 0, Qt.AlignTop)
+        self.strip = MiniTimeline()
+        v.addWidget(self.day)
+        v.addLayout(row)
+        v.addWidget(self.strip)
+
+    def set_day(self, date: str, s: dict):
+        self.day.setText(time.strftime("%a %b %d",
+                        time.strptime(date, "%Y-%m-%d")))
+        fl = s["counts"][patterns.FLOW]
+        self.flow.setText(f"{fl}m flow")
+        self.meta.setText(f"{s['total_key']:,} keys")
+        self.strip.set_strip(s.get("strip", []))
+
+
 # ---------------------------------------------------------------- window
 class Dashboard(QMainWindow):
     _render_done_sig = Signal(dict)
+    _week_done_sig = Signal(dict)
 
     def __init__(self, date: str | None = None):
         super().__init__()
         self.date = date
         self.ctl = Controller()
-        self.setWindowTitle("The Dayplayer — today, played back")
-        self.resize(1000, 760)
-        self.setWindowIcon(QIcon(os.path.join(
-            os.path.dirname(__file__), "..", "assets", "icon.png")))
+        self.setWindowTitle("Circadia — your day, played back")
+        self.resize(1020, 860)
+        icon_path = os.path.join(os.path.dirname(__file__), "..",
+                                 "assets", "icon.png")
+        self.setWindowIcon(QIcon(icon_path))
         self._rendering = False
-
         self._render_done_sig.connect(self._on_render_done)
+        self._week_done_sig.connect(self._on_week_done)
+
         self._build()
         self._refresh()
+        self._refresh_week()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._refresh)
         self.timer.start(5000)
@@ -261,31 +372,46 @@ class Dashboard(QMainWindow):
     def _build(self):
         root = QWidget()
         self.setCentralWidget(root)
-        col = QVBoxLayout(root)
-        col.setContentsMargins(18, 16, 18, 12)
-        col.setSpacing(12)
+        outer = QVBoxLayout(root)
+        outer.setContentsMargins(18, 14, 18, 12)
+        outer.setSpacing(10)
 
-        # header -----------------------------------------------------
+        # header
         head = QHBoxLayout()
-        title = QLabel("THE DAYPLAYER")
+        title = QLabel("CIRCADIA")
         title.setObjectName("h1")
+        sub = QLabel("your day, played back")
+        sub.setObjectName("dim")
         self.status = QLabel("○ not recording")
         self.status.setStyleSheet(
             f"color:{DIM};font-size:12px;padding:4px 10px;"
             f"border:1px solid {BORDER};border-radius:999px;")
+        live_btn = QPushButton("◉ GO LIVE")
+        live_btn.setObjectName("live")
+        live_btn.clicked.connect(lambda: open_live_window())
         self.record_btn = QPushButton("start recording")
         self.record_btn.clicked.connect(self._toggle_record)
         head.addWidget(title)
-        head.addSpacing(10)
-        self.date_lab = QLabel("")
-        self.date_lab.setObjectName("dim")
-        head.addWidget(self.date_lab)
+        head.addSpacing(8)
+        head.addWidget(sub)
         head.addStretch(1)
         head.addWidget(self.status)
         head.addWidget(self.record_btn)
-        col.addLayout(head)
+        head.addWidget(live_btn)
+        outer.addLayout(head)
 
-        # stat cards -------------------------------------------------
+        # tabs
+        self.tabs = QTabWidget()
+        outer.addWidget(self.tabs, 1)
+        self.tabs.addTab(self._build_today(), "TODAY")
+        self.tabs.addTab(self._build_week(), "WEEK")
+
+    def _build_today(self) -> QWidget:
+        wrap = QWidget()
+        col = QVBoxLayout(wrap)
+        col.setContentsMargins(12, 12, 12, 12)
+        col.setSpacing(10)
+
         cards = QHBoxLayout()
         cards.setSpacing(10)
         self.card_key = StatCard("typing events")
@@ -299,7 +425,6 @@ class Dashboard(QMainWindow):
             cards.addWidget(c)
         col.addLayout(cards)
 
-        # timeline ---------------------------------------------------
         tl_wrap = QVBoxLayout()
         tl_head = QLabel("TODAY'S TIMELINE")
         tl_head.setObjectName("dim")
@@ -308,14 +433,12 @@ class Dashboard(QMainWindow):
         tl_wrap.addWidget(self.timeline)
         col.addLayout(tl_wrap)
 
-        # patterns + apps --------------------------------------------
         mid = QHBoxLayout()
         mid.setSpacing(10)
-
         pat_wrap = QFrame(objectName="card")
         pv = QVBoxLayout(pat_wrap)
         pv.setContentsMargins(14, 12, 14, 12)
-        pv.setSpacing(8)
+        pv.setSpacing(4)
         pv.addWidget(QLabel("PATTERNS"))
         self.pat_rows = {}
         for key, meta in patterns.PATTERN_META.items():
@@ -325,18 +448,18 @@ class Dashboard(QMainWindow):
             name.setStyleSheet(f"color:{meta['color']};font-weight:700;")
             bar = QFrame()
             bar.setFixedHeight(8)
-            bar.setStyleSheet(
-                f"background:{meta['color']};border-radius:4px;")
+            bar.setStyleSheet(f"background:{meta['color']};"
+                              f"border-radius:4px;")
             val = QLabel("0 min")
             val.setObjectName("dim")
-            desc = QLabel(meta["desc"])
-            desc.setObjectName("dim")
             row.addWidget(name)
             row.addWidget(bar, 1)
             row.addWidget(val)
-            self.pat_rows[key] = (bar, val, row, desc)
+            self.pat_rows[key] = (bar, val)
             pv.addLayout(row)
-            pv.addWidget(desc)
+            d = QLabel(meta["desc"])
+            d.setObjectName("dim")
+            pv.addWidget(d)
         mid.addWidget(pat_wrap, 3)
 
         app_wrap = QFrame(objectName="card")
@@ -362,7 +485,6 @@ class Dashboard(QMainWindow):
         mid.addWidget(app_wrap, 2)
         col.addLayout(mid)
 
-        # render / blind test ----------------------------------------
         rw = QFrame(objectName="card")
         rv = QVBoxLayout(rw)
         rv.setContentsMargins(14, 12, 14, 12)
@@ -391,14 +513,65 @@ class Dashboard(QMainWindow):
         rv.addLayout(players)
         col.addWidget(rw)
 
-        col.addStretch(1)
-        foot = QLabel("timings only — never letters, never content · "
-                      "logs stay in ~/.dayplayer")
-        foot.setObjectName("dim")
-        foot.setAlignment(Qt.AlignCenter)
-        col.addWidget(foot)
+        self.tagrow = TagRow(self.date or time.strftime("%Y-%m-%d"))
+        col.addWidget(self.tagrow)
 
-    # ------------------------------------------------------------ logic
+        col.addStretch(1)
+        return wrap
+
+    def _build_week(self) -> QWidget:
+        wrap = QWidget()
+        col = QVBoxLayout(wrap)
+        col.setContentsMargins(12, 12, 12, 12)
+        col.setSpacing(10)
+
+        head = QHBoxLayout()
+        self.week_btn = QPushButton("▶  RENDER MY WEEK")
+        self.week_btn.setObjectName("primary")
+        self.week_btn.clicked.connect(self._render_week)
+        whint = QLabel("seven days, each ~42s — the audible diary")
+        whint.setObjectName("dim")
+        self.week_info = QLabel("")
+        self.week_info.setStyleSheet(f"color:{CYAN};font-weight:700;")
+        head.addWidget(self.week_btn)
+        head.addSpacing(12)
+        head.addWidget(whint)
+        head.addStretch(1)
+        head.addWidget(self.week_info)
+        col.addLayout(head)
+
+        self.week_wave = Waveform()
+        self.week_play = QPushButton("▶ play week")
+        self.week_play.clicked.connect(self._play_week)
+        p = QHBoxLayout()
+        p.addWidget(self.week_wave, 1)
+        p.addWidget(self.week_play)
+        col.addLayout(p)
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        self.day_cards = []
+        for i in range(7):
+            c = WeekDayCard()
+            self.day_cards.append(c)
+            grid.addWidget(c, i // 4, i % 4)
+        col.addLayout(grid)
+
+        corr = QFrame(objectName="card")
+        cv = QVBoxLayout(corr)
+        cv.setContentsMargins(14, 10, 14, 10)
+        cv.addWidget(QLabel("WHAT YOUR TAGS SAY (needs ≥2 tagged days)"))
+        self.corr_label = QLabel("tag a few days first — e.g. 'shipped', "
+                                 "'meeting day', 'good day'")
+        self.corr_label.setObjectName("dim")
+        self.corr_label.setWordWrap(True)
+        cv.addWidget(self.corr_label)
+        col.addWidget(corr)
+
+        col.addStretch(1)
+        return wrap
+
+    # ------------------------------------------------------------ today
     def _live(self) -> bool:
         from . import features
         ev = features.load_events(self.date)
@@ -406,7 +579,7 @@ class Dashboard(QMainWindow):
 
     def _refresh(self):
         s = patterns.day_summary(self.date)
-        self.date_lab.setText(s.get("date") or time.strftime("%Y-%m-%d"))
+        self.tagrow.date = self.date or time.strftime("%Y-%m-%d")
         live = self._live()
         self.status.setText("● recording" if live else "○ not recording")
         self.status.setStyleSheet(
@@ -424,10 +597,10 @@ class Dashboard(QMainWindow):
         self._set(self.card_flail, f"{s['counts'][patterns.FLAIL]} min")
         self._set(self.card_sw, f"{int(s['switches']):,}")
         km = s["mouse_km"]
-        self._set(self.card_mouse, f"{km:.1f} km" if km >= 1 else
-                  f"{km*1000:.0f} m")
+        self._set(self.card_mouse, f"{km:.1f} km" if km >= 1
+                  else f"{km*1000:.0f} m")
         total = s["n_minutes"]
-        for key, (bar, val, _row, _desc) in self.pat_rows.items():
+        for key, (bar, val) in self.pat_rows.items():
             share = s["counts"][key] / max(total, 1)
             bar.setMaximumWidth(int(share * 220) + 2)
             val.setText(f"{s['counts'][key]} min")
@@ -453,7 +626,7 @@ class Dashboard(QMainWindow):
         elif self._live():
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.information(
-                self, "Dayplayer",
+                self, "Circadia",
                 "Already recording — the menu bar / tray app is watching.\n"
                 "(stop it from its own menu to avoid double logs)")
         else:
@@ -494,6 +667,88 @@ class Dashboard(QMainWindow):
         self.reveal.setStyleSheet(
             f"color:{'#3ecf8e' if good else RED};font-weight:700;")
 
+    # ------------------------------------------------------------- week
+    def _refresh_week(self):
+        import datetime
+        self._week_summaries = []
+        today = self.date or time.strftime("%Y-%m-%d")
+        end = datetime.date.fromisoformat(today)
+        for i in range(6, -1, -1):
+            d = (end - datetime.timedelta(days=i)).isoformat()
+            s = patterns.day_summary(d)
+            self._week_summaries.append((d, s))
+        for card, (d, s) in zip(self.day_cards, self._week_summaries):
+            if s.get("empty"):
+                card.day.setText(time.strftime(
+                    "%a %b %d", time.strptime(d, "%Y-%m-%d")))
+                card.flow.setText("—")
+                card.meta.setText("no data")
+                card.strip.set_strip([])
+            else:
+                card.set_day(d, s)
+        corrs = tags.correlations()
+        if corrs:
+            lines = []
+            for c in corrs:
+                d_flow = c["flow_yes"] - c["flow_no"]
+                arrow = "↑" if d_flow > 0 else "↓"
+                lines.append(
+                    f"“{c['tag']}” ({c['n']} days): "
+                    f"{c['flow_yes']:.0f}m flow vs {c['flow_no']:.0f}m "
+                    f"usual ({arrow}{abs(d_flow):.0f}m) · "
+                    f"{c['key_yes']:,.0f} keys vs {c['key_no']:,.0f}")
+            self.corr_label.setText("\n".join(lines))
+            self.corr_label.setStyleSheet(f"color:{INK};")
+        else:
+            tagged = sum(1 for _, s in self._week_summaries
+                         if not s.get("empty"))
+            self.corr_label.setText(
+                f"{tagged} day(s) recorded this week — tag days "
+                f"(e.g. 'shipped', 'meeting day') and correlations "
+                f"appear once you have ≥2 of a tag")
+
+    def _render_week(self):
+        if getattr(self, "_week_rendering", False):
+            return
+        self._week_rendering = True
+        self.week_btn.setText("rendering…")
+        self.week_info.setText("")
+
+        def done(r):
+            self._week_done_sig.emit(r)
+        import threading
+
+        def worker():
+            try:
+                r = pipeline.render_week(self.date)
+            except Exception as e:
+                r = {"error": "crash", "message": str(e)}
+            done(r)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_week_done(self, result: dict):
+        self._week_rendering = False
+        self.week_btn.setText("▶  RENDER MY WEEK")
+        if result.get("error"):
+            self.week_info.setText(result.get("message", ""))
+            self.week_info.setStyleSheet(f"color:{RED};")
+            return
+        self._week_path = os.path.join(config.RENDER_DIR, result["id"],
+                                       "week.wav")
+        self.week_wave.load(self._week_path)
+        self.week_info.setText(
+            f"{len(result['dates'])} days · "
+            f"{int(len(result['dates']) * 42)}s album")
+
+    def _play_week(self):
+        if getattr(self, "_week_path", None):
+            if self.week_play.text().startswith("▶"):
+                self.ctl.player.play(self._week_path)
+                self.week_play.setText("■ stop")
+            else:
+                self.ctl.stop_playback()
+                self.week_play.setText("▶ play week")
+
 
 def main():
     args = sys.argv[1:]
@@ -504,8 +759,8 @@ def main():
     win.show()
     if "--grab" in args:                          # UI test mode
         out = args[args.index("--grab") + 1]
-        if win.date:                              # attach an existing
-            import json                            # render for waveforms
+        if win.date:
+            import json
             for sid in sorted(os.listdir(config.RENDER_DIR), reverse=True):
                 mp = os.path.join(config.RENDER_DIR, sid, "meta.json")
                 if os.path.exists(mp):
@@ -516,8 +771,15 @@ def main():
                         win.pa.load_session(win.ctl._blind_path("a") or "")
                         win.pb.load_session(win.ctl._blind_path("b") or "")
                         break
-        QTimer.singleShot(1500, lambda: (
-            win.grab().save(out), print(f"grabbed {out}"), app.quit()))
+        QTimer.singleShot(1800, lambda: (
+            win.tabs.setCurrentIndex(0),
+            win.grab().save(out),
+            print(f"grabbed {out}"),
+            QTimer.singleShot(400, lambda: (
+                win.tabs.setCurrentIndex(1), win.grab().save(
+                    out.replace(".png", "-week.png")),
+                print("grabbed week tab"),
+                app.quit()))))
     sys.exit(app.exec())
 
 

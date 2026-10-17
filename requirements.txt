@@ -4,3 +4,4 @@ PySide6
 rumps; sys_platform == "darwin"
 pystray; sys_platform != "darwin"
 Pillow; sys_platform != "darwin"
+sounddevice

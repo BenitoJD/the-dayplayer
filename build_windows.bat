@@ -6,7 +6,7 @@ python -m venv .venv || goto :err
 .venv\Scripts\pyinstaller --noconfirm --name Dayplayer --onefile --windowed ^
     --icon assets\icon.ico --add-data "assets;assets" ^
     --hidden-import pystray._win32 ^
-    --hidden-import dayplayer.dashboard run_dayplayer.py
+    --hidden-import dayplayer.dashboard --hidden-import dayplayer.livewindow run_dayplayer.py
 if errorlevel 1 goto :err
 echo.
 echo Done. Your app: dist\Dayplayer.exe

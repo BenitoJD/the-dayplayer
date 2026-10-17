@@ -18,10 +18,9 @@ import pystray
 from PIL import Image, ImageDraw
 
 from . import config
-from .controller import Controller, open_dashboard_window
+from .controller import Controller, open_dashboard_window, open_live_window
 
-ABOUT = ("The Dayplayer\n\n"
-         "Your workday, played back.\n\n"
+ABOUT = ("Circadia — your day, played back.\n\n"
          "Records timings only — never letters, never content.\n"
          "Raw logs stay in ~/.dayplayer.\n\n"
          "docs/TRUST.md holds the full promise.")
@@ -75,13 +74,13 @@ class WinTrayApp:
         self._reveal = "— vote first —"
         self._session_ready = False
         self.icon = pystray.Icon(
-            "Dayplayer", _icon_image(False), "Dayplayer", menu=self._menu())
+            "Circadia", _icon_image(False), "Circadia", menu=self._menu())
         self._ticker = threading.Thread(target=self._tick_loop, daemon=True)
 
     # ------------------------------------------------------------- notify
     def _notify(self, title: str, message: str):
         try:
-            self.icon.notify(message=message, title=f"Dayplayer — {title}")
+            self.icon.notify(message=message, title=f"Circadia — {title}")
         except Exception:
             pass
 
@@ -95,6 +94,8 @@ class WinTrayApp:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("◈  Open Dashboard",
                              lambda: open_dashboard_window()),
+            pystray.MenuItem("◉  Go Live — hear your state",
+                             lambda: open_live_window()),
             pystray.MenuItem(lambda item: "Rendering… (~30s)"
                              if self._rendering else "▶  Render My Day",
                              self.on_render),
@@ -185,7 +186,7 @@ class WinTrayApp:
         os.startfile(config.LOG_DIR)      # type: ignore[attr-defined]
 
     def on_about(self, icon=None, item=None):
-        ctypes.windll.user32.MessageBoxW(0, ABOUT, "Dayplayer", 0x40)
+        ctypes.windll.user32.MessageBoxW(0, ABOUT, "Circadia", 0x40)
 
     def on_quit(self, icon=None, item=None):
         self.ctl.stop_playback()

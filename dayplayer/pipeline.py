@@ -52,3 +52,82 @@ def load_session(session_id: str) -> dict | None:
             return json.load(fh)
     except FileNotFoundError:
         return None
+
+
+# ------------------------------------------------------------------ week
+WEEK_SECONDS_PER_DAY = 42.0
+WEEK_CROSSFADE = 1.2
+
+
+def render_week(end_date: str | None = None, n_days: int = 7):
+    """The audible diary: last n_days of recorded days, each condensed to
+    ~42s, crossfaded into one piece. Returns session dict."""
+    import datetime
+    import wave as wavmod
+
+    import numpy as np
+
+    from . import synth
+
+    end = datetime.date.fromisoformat(
+        end_date or time.strftime("%Y-%m-%d"))
+    dates = []
+    for i in range(n_days):
+        d = (end - datetime.timedelta(days=i)).isoformat()
+        if os.path.exists(config.log_path(d)):
+            dates.append(d)
+    dates.reverse()                                   # oldest first
+    recorded = [d for d in dates
+                if features.extract(d)["minutes"]]
+    if not recorded:
+        return {"error": "no_data",
+                "message": "No recorded days found in the last week."}
+
+    session_id = "week-" + time.strftime("%Y%m%d-%H%M%S")
+    out_dir = os.path.join(config.RENDER_DIR, session_id)
+    os.makedirs(out_dir, exist_ok=True)
+
+    chunks = []
+    tmp_paths = []
+    for d in recorded:
+        feats = features.extract(d)
+        score = composer.compose(feats, seed=7,
+                                 target_duration=WEEK_SECONDS_PER_DAY)
+        tmp = os.path.join(out_dir, f"day-{d}.wav")
+        synth.render(score, tmp, seed=7)
+        tmp_paths.append(tmp)
+        with wavmod.open(tmp) as w:
+            x = np.frombuffer(w.readframes(w.getnframes()),
+                              dtype=np.int16).astype(float) / 32768.0
+        chunks.append(x[::2])                          # mono
+
+    fade = int(WEEK_CROSSFADE * config.SAMPLE_RATE)
+    total = sum(len(c) for c in chunks) - fade * (len(chunks) - 1)
+    out = np.zeros(total)
+    pos = 0
+    for i, c in enumerate(chunks):
+        if i > 0:
+            # crossfade with previous tail
+            pos -= fade
+            ramp_up = np.linspace(0, 1, fade)
+            out[pos:pos + fade] *= (1 - ramp_up)
+            c = c.copy()
+            c[:fade] *= ramp_up
+        out[pos:pos + len(c)] += c[:max(0, total - pos)]
+        pos += len(c)
+    peak = np.max(np.abs(out)) or 1.0
+    out = out / peak * 0.89
+
+    week_path = os.path.join(out_dir, "week.wav")
+    pcm = (out * 32767).astype(np.int16)
+    with wavmod.open(week_path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(config.SAMPLE_RATE)
+        w.writeframes(np.column_stack([pcm, pcm]).tobytes())
+
+    meta = {"id": session_id, "kind": "week", "dates": recorded,
+            "created": time.time()}
+    with open(os.path.join(out_dir, "meta.json"), "w") as fh:
+        json.dump(meta, fh, indent=2)
+    return meta

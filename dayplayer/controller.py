@@ -18,6 +18,19 @@ from .playback import Player
 from .recorder import Recorder
 
 
+def open_live_window():
+    """Open the Circadia Live window as a separate process."""
+    if getattr(sys, "frozen", False):
+        subprocess.Popen([sys.executable, "--live"])
+    else:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        kwargs = {"cwd": root}
+        if sys.platform != "win32":
+            kwargs["start_new_session"] = True
+        subprocess.Popen([sys.executable, "-m", "dayplayer.livewindow"],
+                         **kwargs)
+
+
 def open_dashboard_window():
     """Open the dashboard window as a separate process (works frozen
     or from source, mac or windows)."""

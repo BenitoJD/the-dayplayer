@@ -1,4 +1,4 @@
-"""The Dayplayer — native apps for macOS and Windows.
+"""Circadia (a.k.a. The Dayplayer) — native apps for macOS and Windows.
 
 macOS   → menu bar app (rumps): ● / ○ in the menu bar
 Windows → system tray app (pystray): see dayplayer/wintray.py
@@ -16,14 +16,14 @@ import sys
 import rumps
 
 from . import config
-from .controller import Controller, open_dashboard_window
+from .controller import Controller, open_dashboard_window, open_live_window
 
 REFRESH_SECS = 2
 
 
 class DayplayerApp(rumps.App):
     def __init__(self):
-        super().__init__(name="Dayplayer", title="○", quit_button=None)
+        super().__init__(name="Circadia", title="○", quit_button=None)
         self.ctl = Controller(notify=self._notify)
         self._pending = None            # render result, consumed on main loop
         self._rendering = False
@@ -32,7 +32,7 @@ class DayplayerApp(rumps.App):
         self._refresh()
 
     def _notify(self, title: str, message: str):
-        rumps.notification("Dayplayer", title, message)
+        rumps.notification("Circadia", title, message)
 
     # ------------------------------------------------------------- menu
     def _build_menu(self):
@@ -62,7 +62,9 @@ class DayplayerApp(rumps.App):
         self.menu = [
             self._status, self._toggle, None,
             rumps.MenuItem("◈  Open Dashboard", callback=lambda mi:
-                           open_dashboard_window()), None,
+                           open_dashboard_window()),
+            rumps.MenuItem("◉  Go Live — hear your state", callback=lambda mi:
+                           open_live_window()), None,
             self._render, None,
             self._play_a, self._play_b, self._stop_play, None,
             self._vote_a, self._vote_b, self._reveal_item, None,
@@ -142,8 +144,8 @@ class DayplayerApp(rumps.App):
 
     def on_about(self, _):
         rumps.Window(
-            title="The Dayplayer",
-            message="Your workday, played back.\n\n"
+            title="Circadia",
+            message="Your day, played back.\n\n"
                     "Records timings only — never letters, never content.\n"
                     "Raw logs stay in ~/.dayplayer.\n\n"
                     "docs/TRUST.md holds the full promise.",
@@ -160,6 +162,10 @@ def main(argv=None):
     if "--dashboard" in argv:
         from .dashboard import main as dash_main
         dash_main()
+        return
+    if "--live" in argv:
+        from .livewindow import main as live_main
+        live_main()
         return
     config.ensure_dirs()
     if sys.platform == "darwin":

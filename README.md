@@ -1,6 +1,6 @@
-# The Dayplayer
+# Circadia
 
-Your workday is already a performance. This plays it back.
+*formerly The Dayplayer — your workday is already a performance; Circadia plays it back.*
 
 A small daemon records only the **timings** of your computer use — key-press
 intervals, mouse distance, scroll velocity, window switches. **Never letters,
@@ -17,7 +17,7 @@ one — and it's yours.
 
 ## The app (macOS)
 
-Double-click **`Dayplayer.app`** — a native menu bar app. You'll see **○**
+Double-click **`Circadia.app`** — a native menu bar app. You'll see **○**
 appear in your menu bar.
 
 1. Click the ○ → **Start Recording**. macOS asks once for *Input
@@ -31,6 +31,29 @@ appear in your menu bar.
    **B is me** — the reveal tells you if the structure is real.
 
 If you moved the repo or changed code: run `./make_app.sh` to rebuild the app.
+
+## Circadia Live — hear your state while you work
+
+Menu → **◉ Go Live** (or the GO LIVE button in the dashboard). A window with
+a breathing orb opens, and a generative soundscape morphs with your state
+in real time:
+
+- **Flow** → a warm pad and a soft heartbeat that tracks your typing tempo
+- **Flail** → static and two clashing notes creeping in
+- **Drift** → an airy wind wash
+- **Quiet** → a low tone, slowly breathing
+
+**Calm mode** hides every number — just orb and sound. A non-judgmental
+mirror: nothing to chase, nothing to feel bad about (see PRINCIPLES.md).
+
+## The Week — the audible diary
+
+Dashboard → **WEEK** tab. Seven day-cards show each day's pattern mix;
+**▶ RENDER MY WEEK** turns them into one album (~42s per day, crossfaded) —
+a week of your life you can *hear*. Tag your days ("shipped", "meeting
+day", "good day") on the Today tab; once a tag has ≥2 days, the Week tab
+shows what your tagged days look like versus the rest — descriptive, never
+scores.
 
 ## The app (Windows)
 

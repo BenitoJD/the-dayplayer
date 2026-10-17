@@ -32,8 +32,12 @@ def _norm(value, scale):
     return max(0.0, min(1.0, value / scale)) if scale else 0.0
 
 
-def compose(feature_data: dict, seed: int | None = None) -> dict:
-    """features.extract() output -> score dict."""
+def compose(feature_data: dict, seed: int | None = None,
+            target_duration: float | None = None) -> dict:
+    """features.extract() output -> score dict.
+
+    target_duration: seconds for the whole piece (default ~3 min);
+    render_week uses ~40s per day so seven days become one album."""
     rng = random.Random(seed)
     minutes = feature_data["minutes"]
     meta = feature_data.get("meta", {})
@@ -41,7 +45,7 @@ def compose(feature_data: dict, seed: int | None = None) -> dict:
         return {"duration": 10, "tracks": {}, "meta": meta, "empty": True}
 
     n = len(minutes)
-    dur = config.TARGET_DURATION
+    dur = target_duration or config.TARGET_DURATION
     spm = dur / n                                     # seconds per minute
     bpm = 96
     beat = 60.0 / bpm
