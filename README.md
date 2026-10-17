@@ -15,35 +15,29 @@ into a ~3-minute piece:
 You hear the difference between a focused Saturday morning and a distracted
 one — and it's yours.
 
-## The blind test (the whole point, for now)
+## The app (macOS)
 
-Every render produces **two** players: one is your real day, the other is the
-*same events with timings shuffled*. Listen blind and vote. If you can
-reliably tell which one is you, the structure is real and the concept
-survives.
+Double-click **`Dayplayer.app`** — a native menu bar app. You'll see **○**
+appear in your menu bar.
 
-## Quick start (macOS / Windows)
+1. Click the ○ → **Start Recording**. macOS asks once for *Input
+   Monitoring* — allow it (System Settings → Privacy & Security). If events
+   stay at 0 after allowing, quit the app from the menu and start it again.
+2. Work normally. The ○ turns **●** while recording; the menu shows today's
+   event count.
+3. Tonight: click ● → **▶ Render My Day** (~30s). You get two players:
+   **Play A** and **Play B**. One is your real day; the other is the same
+   events with timings shuffled. Listen blind, then vote **A is me** /
+   **B is me** — the reveal tells you if the structure is real.
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install pynput numpy        # Windows: .venv\Scripts\pip
-```
+If you moved the repo or changed code: run `./make_app.sh` to rebuild the app.
 
-Then on **macOS**, double-click:
+## The blind test is the gate
 
-1. **`Start Recording.command`** — first run: allow *Input Monitoring* for
-   your terminal app when macOS asks (System Settings → Privacy & Security),
-   then stop (Ctrl-C) and start again. Work normally for a few hours.
-2. **`Open Dayplayer UI.command`** — dashboard opens in your browser
-   (http://127.0.0.1:7331). Watch the day's timeline build, then hit
-   **Render my day** and take the blind test.
-
-On **Windows**, run the same two steps from a terminal:
-
-```bat
-.venv\Scripts\python -m dayplayer.recorder
-.venv\Scripts\python -m dayplayer.server
-```
+Continue if the real-timing render is distinguishable and you *want to hear
+it again*. Revise the mapping if it's mush. Stop claiming success if only
+the technical render works but hearing it tells you nothing.
+See docs/PRINCIPLES.md.
 
 ## How it works
 
@@ -54,11 +48,13 @@ features.py   per-minute vectors: key rate, rhythm CV, burstiness,
               flail rate, mouse distance, idle
 composer.py   features → score (JSON): ticks, kicks, blips, drones…
 synth.py      score → WAV (pure numpy synth, no DAW, no internet)
-server.py     local dashboard + blind A/B test + timeline
+app.py        native macOS menu bar app (rumps): record, render,
+              play A/B, blind vote — no browser, no server
+server.py     optional local dashboard (kept for the future share player)
 ```
 
 The **score is JSON** — the same score can later be played in a browser
-(Tone.js) or wrapped in a native shell without touching the recorder.
+(Tone.js) or wrapped in a native Windows shell without touching the recorder.
 
 Test the whole chain without recording anything:
 
@@ -72,8 +68,11 @@ See **[docs/TRUST.md](docs/TRUST.md)** — the short version: raw logs never
 leave `~/.dayplayer`, only rendered audio is ever meant to be shared, and the
 recorder is open for anyone to read.
 
-## Status
+## Roadmap
 
-Stage 1 — proof of concept. The gate: *is the real-timing render
-distinguishable from the shuffled one?* See docs/PRINCIPLES.md for the
-stop/continue rules.
+- **Stage 1 (now):** macOS menu bar app + blind test. Gate: is the
+  real-timing render distinguishable from the shuffled one?
+- **Stage 2:** signed & notarized .dmg, Windows shell, shareable render
+  links (web player for audio only).
+- **Stage 3:** mapping packs, week/month renders ("the audible diary"),
+  named patterns (Flow, Flail, Drift, Mire).

@@ -1,4 +1,4 @@
-"""The Dayplayer recorder daemon.
+"""The Dayplayer recorder.
 
 Records ONLY input timing and coarse event classes:
   keyboard  -> down/up timestamps + class (letter/space/tab/mod/...)
@@ -8,15 +8,15 @@ Records ONLY input timing and coarse event classes:
 NEVER RECORDED: characters typed, file names, URLs, window titles,
 clipboard, screen content, anything readable. See docs/TRUST.md.
 
-Run:  python3 -m dayplayer.recorder
-Stop: Ctrl-C  (or close the terminal)
+Two ways to run:
+  CLI:  python3 -m dayplayer.recorder
+  App:  dayplayer.app.Recorder (embedded, started/stopped from menu bar)
 """
 from __future__ import annotations
 
 import json
 import math
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -76,10 +76,7 @@ def _key_class(key) -> str:
             return "key"                            # dead key / ime
         if ch == " ":
             return "space"
-        if ch.isalpha() or ch.isdigit() or ch in "\t\n\r":
-            # letters, digits -> same class. tab/newline specials below.
-            return "key"
-        return "key"                                # punctuation -> same class
+        return "key"                                # letters, digits, punct
     name = getattr(key, "name", "") or ""
     if name.startswith("f") and name[1:].isdigit():
         return "fn"
@@ -168,46 +165,89 @@ def heartbeat(writer: JsonlWriter, stop: threading.Event):
         stop.wait(60.0)
 
 
-# ------------------------------------------------------------------- main
-def main():
-    config.ensure_dirs()
-    writer = JsonlWriter()
-    stop = threading.Event()
+# --------------------------------------------------------------- Recorder
+class Recorder:
+    """Embeddable recorder: start()/stop(), event count, live flag."""
 
-    mth = MouseMoveThrottle(config.MOUSE_MOVE_MIN_PX)
+    def __init__(self):
+        self.writer: JsonlWriter | None = None
+        self._stop = threading.Event()
+        self._kbd = None
+        self._mse = None
+        self._threads: list[threading.Thread] = []
+        self.count = 0
 
-    def on_press(key):
-        writer.write({"type": "kd", "c": _key_class(key)})
+    @property
+    def running(self) -> bool:
+        return self.writer is not None
 
-    def on_release(key):
-        writer.write({"type": "ku", "c": _key_class(key)})
+    def start(self):
+        if self.running:
+            return
+        config.ensure_dirs()
+        self._stop = threading.Event()
+        self.writer = JsonlWriter()
+        self.count = 0
+        mth = MouseMoveThrottle(config.MOUSE_MOVE_MIN_PX)
+        w = self.writer
 
-    def on_move(x, y):
-        d = mth.distance(x, y)
-        if d is not None:
-            writer.write({"type": "mm", "d": d})
+        def count(fn):
+            def inner(*a, **kw):
+                self.count += 1
+                fn(*a, **kw)
+            return inner
 
-    def on_click(x, y, button, pressed):
-        writer.write({"type": "mc", "b": button.name, "down": pressed})
+        @count
+        def on_press(key):
+            w.write({"type": "kd", "c": _key_class(key)})
 
-    def on_scroll(x, y, dx, dy):
-        writer.write({"type": "ms", "dy": (1 if dy > 0 else -1),
-                      "n": min(abs(int(dy)), 9)})
+        @count
+        def on_release(key):
+            w.write({"type": "ku", "c": _key_class(key)})
 
-    threads = [threading.Thread(target=window_watcher, args=(writer, stop), daemon=True),
-               threading.Thread(target=heartbeat, args=(writer, stop), daemon=True)]
+        @count
+        def on_move(x, y):
+            d = mth.distance(x, y)
+            if d is not None:
+                w.write({"type": "mm", "d": d})
 
-    kbd = None
-    mse = None
-    try:
-        kbd = keyboard.Listener(on_press=on_press, on_release=on_release)
-        kbd.start()
-        mse = mouse.Listener(on_move=on_move, on_click=on_click,
-                             on_scroll=on_scroll)
-        mse.start()
-        for t in threads:
+        @count
+        def on_click(x, y, button, pressed):
+            w.write({"type": "mc", "b": button.name, "down": pressed})
+
+        @count
+        def on_scroll(x, y, dx, dy):
+            w.write({"type": "ms", "dy": (1 if dy > 0 else -1),
+                     "n": min(abs(int(dy)), 9)})
+
+        self._kbd = keyboard.Listener(on_press=on_press, on_release=on_release)
+        self._kbd.start()
+        self._mse = mouse.Listener(on_move=on_move, on_click=on_click,
+                                   on_scroll=on_scroll)
+        self._mse.start()
+        for target in (window_watcher, heartbeat):
+            t = threading.Thread(target=target,
+                                 args=(self.writer, self._stop), daemon=True)
             t.start()
+            self._threads.append(t)
 
+    def stop(self):
+        if not self.running:
+            return
+        self._stop.set()
+        for l in (self._kbd, self._mse):
+            if l:
+                l.stop()
+        self._kbd = self._mse = None
+        self.writer.close()
+        self.writer = None
+
+
+# ------------------------------------------------------------------- CLI
+def main():
+    rec = Recorder()
+    try:
+        rec.start()
         print("● Dayplayer recording — only timings, never content.")
         print(f"  Log: {config.log_path()}")
         print("  Stop with Ctrl-C.")
@@ -217,13 +257,10 @@ def main():
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n■ Recording stopped.")
+        pass
     finally:
-        stop.set()
-        for l in (kbd, mse):
-            if l:
-                l.stop()
-        writer.close()
+        rec.stop()
+        print("\n■ Recording stopped.")
 
 
 if __name__ == "__main__":
