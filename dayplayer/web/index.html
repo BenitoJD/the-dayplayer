@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Dayplayer</title>
+<style>
+  :root{
+    --bg:#0d0f14; --card:#151923; --card2:#1b2130; --ink:#e8ebf2;
+    --dim:#8b93a7; --accent:#f0b429; --good:#3ecf8e; --bad:#ef6c57;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    max-width:880px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:28px;letter-spacing:-.5px}
+  .tag{color:var(--dim);margin-top:4px}
+  .grid{display:grid;gap:16px;margin-top:28px}
+  .card{background:var(--card);border:1px solid #232a3b;border-radius:14px;
+    padding:20px 22px}
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:4px 12px;
+    border-radius:999px;font-size:13px;font-weight:600}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+  .pill.live{background:rgba(62,207,142,.12);color:var(--good)}
+  .pill.live .dot{background:var(--good);animation:pulse 1.6s infinite}
+  .pill.dead{background:rgba(239,108,87,.1);color:var(--bad)}
+  .pill.dead .dot{background:var(--bad)}
+  @keyframes pulse{50%{opacity:.35}}
+  .stats{display:flex;gap:26px;flex-wrap:wrap;margin-top:12px;color:var(--dim);
+    font-size:13.5px}
+  .stats b{color:var(--ink);font-family:var(--mono);font-size:15px}
+  canvas{width:100%;height:64px;display:block;margin-top:14px}
+  button{background:var(--accent);color:#1a1405;border:0;border-radius:10px;
+    font:600 16px/1 inherit;padding:14px 22px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:wait}
+  button.ghost{background:var(--card2);color:var(--ink)}
+  .players{display:grid;gap:14px;margin-top:16px}
+  .player{background:var(--card2);border:1px solid #2a3247;border-radius:12px;
+    padding:14px 16px;display:grid;gap:8px}
+  .player .label{font-family:var(--mono);font-weight:700;letter-spacing:2px}
+  audio{width:100%}
+  .vote{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap}
+  .reveal{margin-top:16px;padding:16px;border-radius:12px;font-weight:600}
+  .reveal.ok{background:rgba(62,207,142,.12);color:var(--good)}
+  .reveal.no{background:rgba(239,108,87,.12);color:var(--bad)}
+  .foot{margin-top:30px;color:var(--dim);font-size:13px;text-align:center}
+  .legend{display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--dim)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;
+    margin-right:5px;vertical-align:-1px}
+  .err{color:var(--bad)}
+</style>
+</head>
+<body>
+  <h1>The Dayplayer</h1>
+  <div class="tag">Your workday, played back — timings only, never content.</div>
+
+  <div class="grid">
+    <div class="card">
+      <span id="statusPill" class="pill dead"><span class="dot"></span><span
+        id="statusText">checking…</span></span>
+      <div class="stats" id="stats"></div>
+      <canvas id="timeline" width="820" height="64"></canvas>
+      <div class="legend">
+        <span><i style="background:#f0b429"></i>typing</span>
+        <span><i style="background:#5b8def"></i>mouse</span>
+        <span><i style="background:#3a4256"></i>idle</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <button id="renderBtn">▶&nbsp; Render my day</button>
+        <span style="color:var(--dim);font-size:13.5px" id="renderHint">
+          You'll get two players. One is your real day, one is the same events
+          with timings shuffled. Listen blind — can you tell which is you?</span>
+      </div>
+      <div id="renderOut"></div>
+    </div>
+  </div>
+
+  <div class="foot">Only timings leave the recorder — never letters, never
+    content. Raw logs stay in <span style="font-family:var(--mono)">~/.dayplayer</span>.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let session = null;
+
+async function poll(){
+  try{
+    const s = await (await fetch('/api/status')).json();
+    const pill = $('statusPill');
+    pill.className = 'pill ' + (s.recording_live ? 'live' : 'dead');
+    $('statusText').textContent = s.recording_live ? 'Recording' : 'Recorder not running';
+    $('stats').innerHTML =
+      `<span>events today <b>${s.events_today.toLocaleString()}</b></span>` +
+      `<span>apps seen <b>${s.apps.length}</b></span>` +
+      `<span>log <b style="font-size:12px">~/.dayplayer/logs/${s.date}.jsonl</b></span>`;
+    drawTimeline();
+  }catch(e){ $('statusText').textContent = 'UI server down'; }
+}
+
+async function drawTimeline(){
+  try{
+    const f = await (await fetch('/api/features')).json();
+    const cv = $('timeline'), ctx = cv.getContext('2d');
+    ctx.clearRect(0,0,cv.width,cv.height);
+    const mins = f.minutes || [];
+    if(!mins.length) return;
+    const maxKey = Math.max(...mins.map(m=>m.key_rate), 1);
+    const maxMouse = Math.max(...mins.map(m=>m.mouse_dist), 1);
+    const bw = cv.width / mins.length;
+    mins.forEach((m,i)=>{
+      if(m.idle){
+        ctx.fillStyle = '#3a4256';
+        ctx.fillRect(i*bw, cv.height-8, Math.max(bw-0.5,0.5), 8);
+      }else{
+        const h = (m.key_rate/maxKey) * cv.height*0.8;
+        ctx.fillStyle = '#f0b429';
+        ctx.fillRect(i*bw, cv.height-h, Math.max(bw-0.5,0.5), h);
+        const hm = (m.mouse_dist/maxMouse) * cv.height*0.35;
+        ctx.fillStyle = 'rgba(91,141,239,.75)';
+        ctx.fillRect(i*bw, cv.height-hm, Math.max(bw-0.5,0.5), hm);
+      }
+    });
+  }catch(e){}
+}
+
+$('renderBtn').onclick = async () => {
+  const btn = $('renderBtn');
+  btn.disabled = true; btn.textContent = 'Composing… (~20s)';
+  $('renderOut').innerHTML = '<span style="color:var(--dim)">rendering two versions…</span>';
+  try{
+    const r = await (await fetch('/api/render', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{}'})).json();
+    if(r.error === 'no_data'){
+      $('renderOut').innerHTML =
+        `<div class="err">${r.message}<br>Start the recorder, work for a while,
+        then render.</div>`;
+      return;
+    }
+    if(r.error){ $('renderOut').innerHTML =
+      `<div class="err">${r.message || r.error}</div>`; return; }
+    session = r.id;
+    $('renderOut').innerHTML = `
+      <div class="players">
+        <div class="player"><span class="label">A</span>
+          <audio controls preload="auto" src="/audio/${r.id}/a.wav"></audio></div>
+        <div class="player"><span class="label">B</span>
+          <audio controls preload="auto" src="/audio/${r.id}/b.wav"></audio></div>
+      </div>
+      <div class="vote">
+        <button class="ghost" onclick="vote('a')">A is me</button>
+        <button class="ghost" onclick="vote('b')">B is me</button>
+      </div>
+      <div id="reveal"></div>`;
+  }catch(e){
+    $('renderOut').innerHTML = `<div class="err">Render failed: ${e}</div>`;
+  }finally{
+    btn.disabled = false; btn.innerHTML = '&#9654;&nbsp; Render my day';
+  }
+};
+
+async function vote(choice){
+  if(!session) return;
+  const r = await (await fetch('/api/vote', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: session, choice})})).json();
+  const div = $('reveal');
+  div.className = 'reveal ' + (r.correct ? 'ok' : 'no');
+  div.innerHTML = `${r.correct ? '✔' : '✘'} ${r.message}
+    <span style="color:var(--dim);font-weight:400">— your real day was
+    player ${r.real_label.toUpperCase()}.</span>`;
+}
+
+poll(); setInterval(poll, 5000);
+</script>
+</body>
+</html>
