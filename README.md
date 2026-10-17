@@ -54,16 +54,24 @@ can *hear*. Tag your days ("shipped", "meeting day", "good day") in the
 whisper line; once a tag has ≥2 days, the window tells you what your
 tagged days look like versus the rest, descriptive, never scores.
 
-## The app (Windows)
+## Download
 
-Option A, **download the ready-made exe**: go to
-[Actions](https://github.com/BenitoJD/the-dayplayer/actions) → latest
-"Build Windows app" run → scroll to **Artifacts** → download
-**Dayplayer-Windows** → unzip → double-click `Dayplayer.exe`.
+**→ [Latest release](https://github.com/BenitoJD/the-dayplayer/releases/latest)**
 
-Option B, build it yourself on any Windows PC with Python 3.11+:
-double-click **`build_windows.bat`** → your app appears at
-`dist\Dayplayer.exe`.
+| Your computer | File | After downloading |
+|---|---|---|
+| Windows | `Circadia.exe` | Double-click it. No install, no Python, no permission prompt. Lives in the system tray |
+| macOS | `Circadia-macOS.zip` | Unzip, drag `Circadia.app` to Applications. First open: **right-click the app → Open** (it is not notarized yet, so double-click alone gets blocked) |
+
+First minute on macOS: the app asks for **Accessibility** and **Input
+Monitoring** (System Settings → Privacy & Security). It opens the right pane
+for you and tells you what it can and cannot hear until you grant it. Without
+the grant it records mouse movement only. Windows needs nothing.
+
+Or build it yourself: `build_windows.bat` on Windows, `./make_app.sh` on
+macOS, `build_macos.sh` for a standalone macOS bundle.
+
+## The app (macOS, from source)
 
 Either way: `Dayplayer.exe` lives in your **system tray** (near the clock).
 Double-click the tray icon to start/stop recording, **no permission
