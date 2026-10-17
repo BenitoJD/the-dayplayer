@@ -16,20 +16,19 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 TMP = tempfile.mkdtemp()
+os.environ["CIRCADIA_DATA_DIR"] = TMP      # set BEFORE importing the app
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from dayplayer import autostart, config, maintenance   # noqa: E402
 
-# isolate every path the app would touch
+assert config.DATA_DIR == TMP, "sandbox failed: refusing to run on real data"
+
+# isolate the one thing that is not derived from the data dir
 autostart.DRY_RUN = True
 autostart.LAUNCH_AGENT_DIR = os.path.join(TMP, "LaunchAgents")
 autostart.LAUNCH_AGENT = os.path.join(autostart.LAUNCH_AGENT_DIR,
                                       "com.benitojd.circadia.plist")
 autostart.XDG_AUTOSTART = os.path.join(TMP, "autostart", "circadia.desktop")
-config.LOG_DIR = os.path.join(TMP, "logs")
-config.RENDER_DIR = os.path.join(TMP, "renders")
-maintenance.TAGS_FILE = os.path.join(TMP, "tags.json")
-maintenance.STATE_FILE = os.path.join(TMP, "state.json")
 config.ensure_dirs()
 
 

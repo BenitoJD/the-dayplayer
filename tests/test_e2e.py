@@ -316,6 +316,7 @@ def main():
               "  macOS is withholding events: grant Accessibility to\n"
               "  Circadia.app (System Settings → Privacy & Security →\n"
               "  Accessibility), then restart the app.")
+    print("\nALL E2E TESTS PASSED ✔")
     return results
 
 

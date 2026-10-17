@@ -101,8 +101,28 @@ def summary_text(s: dict | None = None) -> str:
             f"day(s).")
 
 
+def _within_data_dir(path: str) -> bool:
+    """Guard: only ever delete inside Circadia's own folder.
+
+    A misconfigured LOG_DIR must never turn "delete my data" into a
+    recursive wipe of somebody's Documents folder.
+    """
+    try:
+        target = os.path.realpath(path)
+        home = os.path.realpath(config.DATA_DIR)
+        return target == home or target.startswith(home + os.sep)
+    except Exception:
+        return False
+
+
 def delete_all_data(stop_recording: bool = True) -> dict:
     """Erase every recording, render, and tag. Returns what was removed."""
+    if not (_within_data_dir(config.LOG_DIR)
+            and _within_data_dir(config.RENDER_DIR)
+            and _within_data_dir(os.path.join(config.DATA_DIR, "x"))):
+        return {"error": "refused",
+                "message": f"Refusing to delete: {config.LOG_DIR} is not "
+                           f"inside {config.DATA_DIR}"}
     if stop_recording:
         try:
             from .recorder import stop_recorder

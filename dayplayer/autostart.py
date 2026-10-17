@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from xml.sax.saxutils import escape
 
 APP_ID = "com.benitojd.circadia"
 LAUNCH_AGENT_DIR = os.path.expanduser("~/Library/LaunchAgents")
@@ -71,7 +72,10 @@ def enable() -> bool:
         cmd = command()
         if sys.platform == "darwin":
             os.makedirs(LAUNCH_AGENT_DIR, exist_ok=True)
-            args = "".join(f"        <string>{a}</string>\n" for a in cmd)
+            # every argument must be XML-escaped: a raw && in the shell
+            # command made the whole plist invalid and launchd ignored it
+            args = "".join(f"        <string>{escape(a)}</string>\n"
+                           for a in cmd)
             with open(LAUNCH_AGENT, "w") as fh:
                 fh.write(
                     '<?xml version="1.0" encoding="UTF-8"?>\n'

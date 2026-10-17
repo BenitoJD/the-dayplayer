@@ -146,12 +146,25 @@ Test the whole chain without recording anything:
 ## Testing
 
 ```
-.venv/bin/python tests/test_edges.py       # weird days, corrupt files, extremes
-.venv/bin/python tests/test_synthetic.py   # pipeline: events → features → score → WAV
-.venv/bin/python tests/test_v2.py          # live states, audio callback, week, tags
-.venv/bin/python tests/test_e2e.py         # REAL capture + live tail + render + blind
-.venv/bin/python tests/test_ui.py          # drives the actual window (QtTest)
+.venv/bin/python tests/test_edges.py          # weird days, corrupt files, extremes
+.venv/bin/python tests/test_features.py       # launch at login, delete data, onboarding
+.venv/bin/python tests/test_features_deep.py  # launchd really runs the job, delete guards
+.venv/bin/python tests/test_synthetic.py      # pipeline: events -> features -> score -> WAV
+.venv/bin/python tests/test_v2.py             # live states, audio callback, week, tags
+.venv/bin/python tests/test_e2e.py            # REAL capture + live tail + render + blind
+.venv/bin/python tests/test_ui.py             # drives the actual window (QtTest)
 ```
+
+Every suite sandboxes itself: it sets `CIRCADIA_DATA_DIR` to a temp folder
+before importing the app, so logs, renders, tags, the recorder's pid file and
+even the launch-at-login plist live in that sandbox. A test can never touch
+your real day, and `delete_all_data()` refuses outright to delete anything
+outside its own data folder.
+
+The deep suite also hands `launchd` a real job and checks it actually runs,
+which is how we learned that an unescaped `&&` in the shell command made the
+whole login plist invalid XML, silently killing launch at login.
+
 
 Every suite isolates itself into a temp data dir, your real `~/.dayplayer`
 is never touched by a test, and production code carries no test-only logic.

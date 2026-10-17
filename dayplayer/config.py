@@ -7,8 +7,11 @@ this machine, and only when the user explicitly shares them.
 import os
 import time
 
-# Where private data lives (never inside the repo)
-DATA_DIR = os.path.expanduser("~/.dayplayer")
+# Where private data lives (never inside the repo).
+# CIRCADIA_DATA_DIR lets a portable install, or a test, keep everything
+# somewhere else, including the recorder's pid and liveness files.
+DATA_DIR = (os.environ.get("CIRCADIA_DATA_DIR")
+            or os.path.expanduser("~/.dayplayer"))
 LOG_DIR = os.path.join(DATA_DIR, "logs")
 RENDER_DIR = os.path.join(DATA_DIR, "renders")
 
